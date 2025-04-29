@@ -1,0 +1,63 @@
+flowchart TB
+    subgraph "Frontend"
+        GUI[Giao diện Streamlit]
+    end
+    
+    subgraph "Backend Web"
+        API[API Server gRPC]
+        AUTH[Authentication Service]
+        LOGGING[Logging Service]
+        ANALYTICS[Analytics Service]
+        
+        subgraph "Message Queue"
+            RMQ[RabbitMQ]
+            DQ[Dramatiq Workers]
+        end
+    end
+    
+    subgraph "Core Chatbot"
+        LLM[Mô hình ngôn ngữ LLM]
+        LC[LangChain Framework]
+        LLTE[LiteLLM Engine]
+        MEMORY[Context Memory]
+        RAG[Retrieval-Augmented Generation]
+        PROMPT[Prompt Engineering Module]
+    end
+    
+    subgraph "Storage"
+        PRODUCT_DB[(Cơ sở dữ liệu sản phẩm)]
+        CONV_DB[(Cơ sở dữ liệu hội thoại)]
+        VECTOR_DB[(Vector Database)]
+    end
+    
+    subgraph "Security"
+        ENC[Mã hóa AES-256]
+        RSA[Bảo mật RSA]
+        SB[Sandbox]
+        FILTER[Content Filter]
+    end
+    
+    GUI -- HTTP Requests --> API
+    API -- Authentication --> AUTH
+    API -- Log Events --> LOGGING
+    API -- Track Metrics --> ANALYTICS
+    
+    API -- Publish Tasks --> RMQ
+    RMQ -- Process --> DQ
+    
+    DQ -- Gửi yêu cầu --> LC
+    LC -- Truy xuất thông tin --> RAG
+    RAG -- Vector Search --> VECTOR_DB
+    RAG -- Truy vấn sản phẩm --> PRODUCT_DB
+    
+    LC -- Tạo prompt --> PROMPT
+    PROMPT -- Context History --> MEMORY
+    MEMORY -- Lưu trữ --> CONV_DB
+    
+    LC -- Gọi mô hình --> LLTE
+    LLTE -- Xử lý --> LLM
+    LLM -- Kiểm duyệt --> FILTER
+    
+    API -- Bảo mật --> ENC
+    API -- Truyền tải --> RSA
+    LLM -- Cách ly --> SB
