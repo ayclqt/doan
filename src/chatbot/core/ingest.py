@@ -28,6 +28,7 @@ __maintainer__ = "Lâm Quang Trí"
 __email__ = "quangtri.lam.9@gmail.com"
 __status__ = "Development"
 
+
 class DataIngestor:
     """
     Lớp xử lý việc nhập dữ liệu vào vector store
@@ -61,9 +62,7 @@ class DataIngestor:
 
         # Chia nhỏ tài liệu
         split_docs = self.text_splitter.split_documents(documents)
-        logger.info(
-            f"Đã chia {len(documents)} tài liệu thành {len(split_docs)} đoạn"
-        )
+        logger.info(f"Đã chia {len(documents)} tài liệu thành {len(split_docs)} đoạn")
 
         # Thêm vào vector store
         self.vector_store.add_documents(split_docs)
@@ -90,14 +89,12 @@ class DataIngestor:
         for i, text in enumerate(texts):
             chunks = self.text_splitter.split_text(text)
             split_texts.extend(chunks)
-            
+
             # Xử lý metadata nếu có
             metadata = metadatas[i] if metadatas and i < len(metadatas) else {}
             split_metadatas.extend([metadata] * len(chunks))
 
-        logger.info(
-            f"Đã chia {len(texts)} văn bản thành {len(split_texts)} đoạn"
-        )
+        logger.info(f"Đã chia {len(texts)} văn bản thành {len(split_texts)} đoạn")
 
         # Thêm vào vector store
         self.vector_store.add_texts(split_texts, split_metadatas)
@@ -116,10 +113,10 @@ class DataIngestor:
 
         logger.info(f"Bắt đầu xử lý file: {file_path}")
         path = Path(file_path)
-        
+
         # Chọn loader phù hợp dựa vào phần mở rộng của file
         loader = None
-        
+
         if path.suffix.lower() == ".txt":
             loader = TextLoader(file_path, encoding="utf-8")
         elif path.suffix.lower() == ".pdf":
@@ -133,15 +130,15 @@ class DataIngestor:
         else:
             logger.error(f"Không hỗ trợ định dạng file: {path.suffix}")
             return
-        
+
         # Tải tài liệu
         try:
             documents = loader.load()
             logger.info(f"Đã tải {len(documents)} tài liệu từ file {path.name}")
-            
+
             # Xử lý và nhập tài liệu
             self.ingest_documents(documents)
-            
+
         except Exception as e:
             logger.error(f"Lỗi khi xử lý file {path.name}: {str(e)}")
 
@@ -160,21 +157,29 @@ class DataIngestor:
             return
 
         logger.info(f"Bắt đầu xử lý thư mục: {directory_path}")
-        
+
         # Lấy danh sách file trong thư mục
         path = Path(directory_path)
-        
+
         # Xác định pattern dựa vào tham số recursive
         pattern = "**/*" if recursive else "*"
-        
+
         # Các định dạng file được hỗ trợ
-        supported_extensions = [".txt", ".pdf", ".doc", ".docx", ".csv", ".xls", ".xlsx"]
-        
+        supported_extensions = [
+            ".txt",
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".csv",
+            ".xls",
+            ".xlsx",
+        ]
+
         # Xử lý từng file
         for file_path in path.glob(pattern):
             if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
                 self.ingest_from_file(str(file_path))
-        
+
         logger.info(f"Đã hoàn thành xử lý thư mục: {directory_path}")
 
     def get_store_stats(self) -> Dict[str, Any]:
@@ -185,7 +190,7 @@ class DataIngestor:
             Dictionary chứa thông tin thống kê
         """
         return self.vector_store.get_collection_stats()
-    
+
     def reset_store(self) -> None:
         """Xóa toàn bộ dữ liệu trong vector store"""
         self.vector_store.delete_collection()

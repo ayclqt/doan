@@ -37,12 +37,14 @@ console = Console()
 def chat(
     model: str = typer.Option(
         settings.model_name,
-        "--model", "-m",
+        "--model",
+        "-m",
         help="Model LLM sử dụng cho chatbot",
     ),
     temperature: float = typer.Option(
         settings.temperature,
-        "--temperature", "-t",
+        "--temperature",
+        "-t",
         help="Nhiệt độ của model LLM",
     ),
 ):
@@ -56,7 +58,7 @@ def chat(
             "[italic]Gõ /exit để thoát, /reset để xóa lịch sử trò chuyện[/italic]"
         )
     )
-    
+
     # Khởi tạo vector store và chatbot
     try:
         vector_store = VectorStore()
@@ -65,7 +67,7 @@ def chat(
             model=model,
             temperature=temperature,
         )
-        
+
         # Kiểm tra xem có dữ liệu trong vector store không
         stats = vector_store.get_collection_stats()
         if stats["count"] == 0:
@@ -73,32 +75,32 @@ def chat(
                 "[yellow]Cảnh báo: Vector store không có dữ liệu. "
                 "Vui lòng sử dụng lệnh 'ingest' để thêm dữ liệu trước khi chat.[/yellow]"
             )
-        
+
     except Exception as e:
         console.print(f"[bold red]Lỗi khi khởi tạo chatbot: {str(e)}[/bold red]")
         raise typer.Exit(code=1)
-    
+
     # Bắt đầu vòng lặp chat
     while True:
         # Nhận input từ người dùng
         user_input = Prompt.ask("\n[bold blue]Bạn[/bold blue]")
-        
+
         # Xử lý các lệnh đặc biệt
         if user_input.lower() == "/exit":
             console.print("[yellow]Đã thoát phiên chat.[/yellow]")
             break
-        
+
         if user_input.lower() == "/reset":
             chatbot.reset_chat_history()
             console.print("[yellow]Đã xóa lịch sử trò chuyện.[/yellow]")
             continue
-        
+
         # Xử lý câu hỏi
         try:
             response = chatbot.ask(user_input)
             console.print("\n[bold green]Chatbot[/bold green]")
             console.print(Markdown(response))
-            
+
         except Exception as e:
             console.print(f"[bold red]Lỗi: {str(e)}[/bold red]")
 
@@ -111,7 +113,8 @@ def ingest(
     ),
     recursive: bool = typer.Option(
         True,
-        "--recursive/--no-recursive", "-r/-nr",
+        "--recursive/--no-recursive",
+        "-r/-nr",
         help="Có xử lý đệ quy các thư mục con hay không",
     ),
 ):
@@ -122,24 +125,22 @@ def ingest(
     try:
         vector_store = VectorStore()
         ingestor = DataIngestor(vector_store=vector_store)
-        
+
     except Exception as e:
         console.print(f"[bold red]Lỗi khi khởi tạo: {str(e)}[/bold red]")
         raise typer.Exit(code=1)
-    
+
     # Nếu không có file_paths, yêu cầu người dùng nhập
     if not file_paths:
-        file_path = Prompt.ask(
-            "Nhập đường dẫn đến file hoặc thư mục cần nhập"
-        )
+        file_path = Prompt.ask("Nhập đường dẫn đến file hoặc thư mục cần nhập")
         file_paths = [file_path]
-    
+
     # Xử lý từng file path
     for path in file_paths:
         if not os.path.exists(path):
             console.print(f"[bold red]Đường dẫn không tồn tại: {path}[/bold red]")
             continue
-        
+
         try:
             if os.path.isdir(path):
                 console.print(f"[yellow]Đang xử lý thư mục: {path}[/yellow]")
@@ -147,10 +148,10 @@ def ingest(
             else:
                 console.print(f"[yellow]Đang xử lý file: {path}[/yellow]")
                 ingestor.ingest_from_file(path)
-                
+
         except Exception as e:
             console.print(f"[bold red]Lỗi khi xử lý {path}: {str(e)}[/bold red]")
-    
+
     # Hiển thị thống kê
     stats = vector_store.get_collection_stats()
     console.print(
@@ -163,7 +164,8 @@ def ingest(
 def clear(
     confirm: bool = typer.Option(
         False,
-        "--yes", "-y",
+        "--yes",
+        "-y",
         help="Xác nhận xóa dữ liệu mà không hỏi",
     ),
 ):
@@ -175,13 +177,13 @@ def clear(
         if not confirm:
             console.print("[yellow]Đã hủy thao tác.[/yellow]")
             return
-    
+
     try:
         vector_store = VectorStore()
         ingestor = DataIngestor(vector_store=vector_store)
         ingestor.reset_store()
         console.print("[green]Đã xóa toàn bộ dữ liệu.[/green]")
-        
+
     except Exception as e:
         console.print(f"[bold red]Lỗi khi xóa dữ liệu: {str(e)}[/bold red]")
         raise typer.Exit(code=1)
@@ -195,7 +197,7 @@ def info():
     try:
         vector_store = VectorStore()
         stats = vector_store.get_collection_stats()
-        
+
         console.print(
             Panel.fit(
                 f"[bold green]Thông tin ứng dụng[/bold green]\n\n"
@@ -207,7 +209,7 @@ def info():
                 f"Model LLM mặc định: {settings.model_name}\n"
             )
         )
-        
+
     except Exception as e:
         console.print(f"[bold red]Lỗi khi lấy thông tin: {str(e)}[/bold red]")
         raise typer.Exit(code=1)

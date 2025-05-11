@@ -22,6 +22,7 @@ __maintainer__ = "Lâm Quang Trí"
 __email__ = "quangtri.lam.9@gmail.com"
 __status__ = "Development"
 
+
 class ProductChatbot:
     """
     Lớp xử lý tương tác với người dùng qua chatbot
@@ -42,24 +43,24 @@ class ProductChatbot:
             temperature: Nhiệt độ của model LLM
         """
         self.vector_store = vector_store or VectorStore()
-        
+
         # Khởi tạo model LLM
         self.model = model or settings.model_name
         self.temperature = temperature or settings.temperature
-        
+
         self.llm = ChatOpenAI(
             model=self.model,
             temperature=self.temperature,
             api_key=settings.openai_api_key.get_secret_value(),
             base_url=settings.openai_api_base,
         )
-        
+
         # Xây dựng chain RAG (Retrieval Augmented Generation)
         self._build_retrieval_chain()
-        
+
         # Lưu trữ lịch sử hội thoại
         self.chat_history = []
-        
+
         logger.info(
             "Khởi tạo ProductChatbot",
             model=self.model,
@@ -73,7 +74,7 @@ class ProductChatbot:
             search_type="similarity",
             search_kwargs={"k": 4},
         )
-        
+
         # Template cho context
         context_prompt = ChatPromptTemplate.from_messages(
             [
@@ -89,11 +90,11 @@ class ProductChatbot:
                 ("human", "{question}"),
             ]
         )
-        
+
         # Tạo chain RAG
         self.retrieval_chain = (
             {
-                "context": retriever, 
+                "context": retriever,
                 "question": RunnablePassthrough(),
                 "chat_history": lambda _: self.chat_history,
             }
@@ -105,18 +106,18 @@ class ProductChatbot:
     def _format_chat_history(self) -> List[Dict[str, Any]]:
         """
         Định dạng lịch sử hội thoại cho prompt
-        
+
         Returns:
             Danh sách tin nhắn đã định dạng
         """
         formatted_history = []
-        
+
         for message in self.chat_history:
             if isinstance(message, HumanMessage):
                 formatted_history.append({"type": "human", "content": message.content})
             elif isinstance(message, AIMessage):
                 formatted_history.append({"type": "ai", "content": message.content})
-                
+
         return formatted_history
 
     def ask(self, question: str) -> str:
@@ -131,22 +132,25 @@ class ProductChatbot:
         """
         if not question.strip():
             return "Vui lòng đặt một câu hỏi."
-        
+
         logger.info("Nhận câu hỏi", question=question)
-        
+
         # Thêm câu hỏi vào lịch sử hội thoại
         self.chat_history.append(HumanMessage(content=question))
-        
+
         try:
             # Lấy câu trả lời từ chain RAG
             response = self.retrieval_chain.invoke(question)
-            
+
             # Thêm câu trả lời vào lịch sử hội thoại
             self.chat_history.append(AIMessage(content=response))
-            
-            logger.info("Trả lời câu hỏi", response=response[:100] + "..." if len(response) > 100 else response)
+
+            logger.info(
+                "Trả lời câu hỏi",
+                response=response[:100] + "..." if len(response) > 100 else response,
+            )
             return response
-            
+
         except Exception as e:
             error_message = f"Đã xảy ra lỗi khi xử lý câu hỏi: {str(e)}"
             logger.error(error_message)
@@ -165,11 +169,11 @@ class ProductChatbot:
             Danh sách tin nhắn trong lịch sử hội thoại
         """
         history = []
-        
+
         for message in self.chat_history:
             if isinstance(message, HumanMessage):
                 history.append({"role": "user", "content": message.content})
             elif isinstance(message, AIMessage):
                 history.append({"role": "assistant", "content": message.content})
-                
+
         return history

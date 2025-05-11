@@ -22,25 +22,28 @@ __maintainer__ = "Lâm Quang Trí"
 __email__ = "quangtri.lam.9@gmail.com"
 __status__ = "Development"
 
+
 class Settings(BaseSettings):
     """Cấu hình chính của ứng dụng."""
-    
+
     # Cấu hình chung của ứng dụng
     app_name: str = "Product Chatbot"
     debug: bool = True
-    
+
     # Cấu hình cho ChromaDB
-    chroma_db_directory: str = ".chroma_db" # Thư mục lưu trữ ChromaDB
-    collection_name: str = "product_info" # Tên collection trong ChromaDB
-    
+    chroma_db_directory: str = ".chroma_db"  # Thư mục lưu trữ ChromaDB
+    collection_name: str = "product_info"  # Tên collection trong ChromaDB
+
     # Cấu hình LLM (OpenAI Compatible)
-    openai_api_base: str = "https://api.openai.com/v1" # Địa chỉ API của OpenAI
-    openai_api_key: SecretStr = "sk-proj-xxxxxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxxxx" # OpenAI API key
-    model_name: str = "gpt-3.5-turbo" # Model của OpenAI
-    temperature: float = 0.7 # Nhiệt độ cho model
-    
+    openai_api_base: str = "https://api.openai.com/v1"  # Địa chỉ API của OpenAI
+    openai_api_key: SecretStr = (
+        "sk-proj-xxxxxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxxxx"  # OpenAI API key
+    )
+    model_name: str = "gpt-3.5-turbo"  # Model của OpenAI
+    temperature: float = 0.7  # Nhiệt độ cho model
+
     # Cấu hình Embedding
-    embedding_model: str = "text-embedding-3-small" # Model embedding
+    embedding_model: str = "text-embedding-3-small"  # Model embedding
 
 
 # Cấu hình logging
