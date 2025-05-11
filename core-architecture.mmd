@@ -1,0 +1,53 @@
+graph TD
+    subgraph Product_Chatbot["Product Chatbot Core"]
+        Chatbot[ProductChatbot]
+        VectorStore[VectorStore]
+        DataIngestor[DataIngestor]
+        Settings[Settings]
+    end
+    
+    subgraph Database["Cơ sở dữ liệu"]
+        ChromaDB[(ChromaDB)]
+    end
+    
+    subgraph Models["Mô hình"]
+        LLM[OpenAI LLM]
+        Embedding[OpenAI Embeddings]
+    end
+    
+    subgraph Chain["Chuỗi xử lý"]
+        RAG[Retrieval Chain]
+        Prompt[Chat Template]
+        TextSplitter[RecursiveCharacterTextSplitter]
+    end
+    
+    Chatbot --> RAG
+    Chatbot --> VectorStore
+    Chatbot --> LLM
+    
+    VectorStore --> ChromaDB
+    VectorStore --> Embedding
+    
+    DataIngestor --> VectorStore
+    DataIngestor --> TextSplitter
+    
+    RAG --> VectorStore
+    RAG --> Prompt
+    RAG --> LLM
+    
+    Settings --> Chatbot
+    Settings --> VectorStore
+    Settings --> DataIngestor
+    
+    style Product_Chatbot fill:#e6f3ff,stroke:#333,stroke-width:1px
+    style Database fill:#ffe6e6,stroke:#333,stroke-width:1px
+    style Models fill:#fff9e6,stroke:#333,stroke-width:1px
+    style Chain fill:#e6ffe6,stroke:#333,stroke-width:1px
+    
+    classDef main fill:#d4f4fa,stroke:#333,stroke-width:1px
+    classDef data fill:#f0e68c,stroke:#333,stroke-width:1px
+    classDef model fill:#ffd700,stroke:#333,stroke-width:1px
+    
+    class Chatbot,RAG main
+    class VectorStore,ChromaDB,DataIngestor data
+    class LLM,Embedding model

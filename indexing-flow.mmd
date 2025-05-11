@@ -1,0 +1,52 @@
+sequenceDiagram
+    participant User as Người dùng
+    participant CLI as Giao diện CLI
+    participant Ingestor as DataIngestor
+    participant TextSplitter as RecursiveCharacterTextSplitter
+    participant Embedding as OpenAIEmbeddings
+    participant VectorStore as VectorStore
+    participant DB as ChromaDB
+    
+    User->>CLI: Chọn lệnh ingest
+    User->>CLI: Cung cấp đường dẫn tệp/thư mục
+    
+    CLI->>Ingestor: Khởi tạo DataIngestor
+    Ingestor->>VectorStore: Khởi tạo VectorStore
+    VectorStore->>Embedding: Khởi tạo OpenAIEmbeddings
+    VectorStore->>DB: Kết nối với ChromaDB
+    
+    alt Là thư mục
+        CLI->>Ingestor: ingest_from_directory(path)
+        loop Cho mỗi tệp được hỗ trợ
+            Ingestor->>Ingestor: ingest_from_file(file_path)
+        end
+    else Là tệp
+        CLI->>Ingestor: ingest_from_file(path)
+    end
+    
+    Ingestor->>Ingestor: Xác định đúng Loader dựa vào định dạng
+    
+    alt PDF
+        Ingestor->>Ingestor: Sử dụng PyPDFLoader
+    else DOCX
+        Ingestor->>Ingestor: Sử dụng Docx2txtLoader
+    else TXT
+        Ingestor->>Ingestor: Sử dụng TextLoader
+    else CSV
+        Ingestor->>Ingestor: Sử dụng CSVLoader
+    else Excel
+        Ingestor->>Ingestor: Sử dụng UnstructuredExcelLoader
+    end
+    
+    Ingestor->>Ingestor: Tải tài liệu
+    Ingestor->>TextSplitter: Chia nhỏ tài liệu
+    TextSplitter-->>Ingestor: Trả về các đoạn văn bản
+    
+    Ingestor->>VectorStore: add_documents(split_docs)
+    VectorStore->>Embedding: Tạo vector embeddings
+    VectorStore->>DB: Lưu trữ embeddings và dữ liệu
+    
+    DB-->>VectorStore: Xác nhận lưu trữ
+    VectorStore-->>Ingestor: Xác nhận hoàn thành
+    Ingestor-->>CLI: Báo cáo trạng thái
+    CLI-->>User: Hiển thị kết quả

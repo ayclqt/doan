@@ -1,9 +1,20 @@
 [project]
-name = "doan"
+name = "product_chatbot"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "Chatbot giới thiệu sản phẩm sử dụng mô hình ngôn ngữ lớn"
 requires-python = ">=3.12"
+authors = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
+maintainers = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
+license = "MIT"
 dependencies = [
-    "crawl4ai>=0.6.2",
+    "langchain",
+    "langchain-openai",
+    "langchain-community",
+    "langchain-chroma",
+    "typer",
+    "pydantic",
+    "pydantic-settings",
+    "structlog",
+    "python-dotenv",
+    "chromadb",
 ]
