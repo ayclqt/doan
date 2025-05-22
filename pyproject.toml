@@ -1,20 +1,28 @@
 [project]
-name = "product_chatbot"
+name = "doan"
 version = "0.1.0"
-description = "Chatbot giới thiệu sản phẩm sử dụng mô hình ngôn ngữ lớn"
-requires-python = ">=3.12"
-authors = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
+author = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
 maintainers = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
+description = "Hệ thống hỏi đáp sản phẩm điện tử"
 license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+requires-python = ">=3.12"
 dependencies = [
-    "langchain",
     "langchain-openai",
     "langchain-community",
-    "langchain-chroma",
-    "typer",
+    "qdrant-client",
+    "sentence-transformers",
+    "python-dotenv",
+    "torch",
+    "pandas",
+    "numpy",
     "pydantic",
     "pydantic-settings",
+    "langchain-huggingface",
+    "langchain-docling",
+    "typer",
+    "rich",
+    "langchain-qdrant",
     "structlog",
-    "python-dotenv",
-    "chromadb",
 ]
