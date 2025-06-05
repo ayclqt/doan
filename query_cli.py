@@ -15,8 +15,16 @@ from rich.markdown import Markdown
 from rich import print as rprint
 from rich.table import Table
 
-from src.langchain_integration.pipeline import LangchainPipeline
-from src.langchain_integration.vectorstore import VectorStore
+from src import LangchainPipeline, VectorStore
+
+
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
+__status__ = "Development"
 
 
 # Khởi tạo Typer và Rich Console

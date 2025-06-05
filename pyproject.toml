@@ -1,7 +1,7 @@
 [project]
 name = "doan"
 version = "0.1.0"
-author = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
+authors = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
 maintainers = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
 description = "Hệ thống hỏi đáp sản phẩm điện tử"
 license = "MIT"
@@ -25,4 +25,6 @@ dependencies = [
     "rich",
     "langchain-qdrant",
     "structlog",
+    "streamlit",
+    "duckduckgo-search",
 ]

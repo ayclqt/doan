@@ -37,6 +37,14 @@ class Config(BaseSettings):
 
     cleaned_data_path: str = "cleaned_data.json"
 
+    # Web search settings
+    web_search_enabled: bool = True
+    web_search_max_results: int = 5
+    web_search_region: str = "vn-vi"
+    web_search_timelimit: str = ""
+    web_search_backend: str = "auto"
+    web_search_similarity_threshold: float = 0.7
+
     deploy_env: str = "dev"
 
 

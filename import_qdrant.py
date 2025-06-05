@@ -10,6 +10,15 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 
 
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
+__status__ = "Development"
+
+
 def import_to_qdrant(export_file, host="localhost", port=6333):
     """Import a previously exported Qdrant collection."""
     print(f"Connecting to Qdrant at {host}:{port}...")

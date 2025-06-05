@@ -9,6 +9,15 @@ import argparse
 from qdrant_client import QdrantClient
 
 
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
+__status__ = "Development"
+
+
 def export_qdrant_collection(
     collection_name, output_file="qdrant_export.pkl", host="localhost", port=6333
 ):

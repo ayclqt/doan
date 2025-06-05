@@ -5,8 +5,16 @@ Data ingestion script for loading product data into the vector database.
 import os
 import argparse
 
-from src.langchain_integration.vectorstore import VectorStore
-from src.langchain_integration.text_processor import TextProcessor
+from src import VectorStore, TextProcessor
+
+
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
+__status__ = "Development"
 
 
 def main():
