@@ -26,6 +26,7 @@ __maintainer__ = "Lâm Quang Trí"
 __email__ = "quangtri.lam.9@gmail.com"
 __status__ = "Development"
 
+load_dotenv()
 
 class AppSettings(BaseSettings):
     """Application settings using Pydantic BaseSettings."""
@@ -64,11 +65,6 @@ class AppSettings(BaseSettings):
     # Application Configuration
     deploy_env: str = "dev"
     log_level: str = "INFO"
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
 
 
 # Pure functions for configuration creation
