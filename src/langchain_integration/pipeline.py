@@ -13,7 +13,7 @@ from langchain_core.runnables import (
 )
 from langchain_openai import ChatOpenAI
 
-from ..config import config, logger
+from .config import config, logger
 from .vectorstore import VectorStore
 from .web_search import HybridSearcher, WebSearcher
 
@@ -54,19 +54,12 @@ class LangchainPipeline:
         self.vector_store.initialize_vectorstore()
 
         # Initialize web search components
-        self.enable_web_search = (
-            enable_web_search
-            if enable_web_search is not None
-            else config.web_search_enabled
-        )
+        self.enable_web_search = enable_web_search if enable_web_search is not None else config.web_search_enabled
         self.web_searcher = WebSearcher() if self.enable_web_search else None
-        self.hybrid_searcher = (
-            HybridSearcher(self.web_searcher, similarity_threshold=web_search_threshold)
-            if self.enable_web_search
-            and self.web_searcher
-            and self.web_searcher.is_available()
-            else None
-        )
+        self.hybrid_searcher = HybridSearcher(
+            self.web_searcher,
+            similarity_threshold=web_search_threshold
+        ) if self.enable_web_search and self.web_searcher and self.web_searcher.is_available() else None
 
         # Set up the pipeline
         self.pipeline = self._create_pipeline()
@@ -105,9 +98,9 @@ class LangchainPipeline:
             vector_context = self._format_vector_context(vector_docs)
 
             # Check if we need web search
-            if self.hybrid_searcher and self.hybrid_searcher.should_use_web_search(
-                vector_docs, question
-            ):
+            if (self.hybrid_searcher and
+                self.hybrid_searcher.should_use_web_search(vector_docs, question)):
+
                 # Perform web search
                 web_results = self.web_searcher.search_product_info(question)
 
@@ -137,7 +130,10 @@ class LangchainPipeline:
             return ""
 
         return "\n\n".join(
-            [f"Sản phẩm {i + 1}:\n" + doc.page_content for i, doc in enumerate(docs)]
+            [
+                f"Sản phẩm {i + 1}:\n" + doc.page_content
+                for i, doc in enumerate(docs)
+            ]
         )
 
     def answer_question(self, question: str) -> str:
@@ -175,19 +171,14 @@ class LangchainPipeline:
 
             info = {
                 "vector_results_count": len(vector_docs),
-                "vector_results": [
-                    {"content": doc.page_content[:200] + "..."}
-                    for doc in vector_docs[:2]
-                ],
+                "vector_results": [{"content": doc.page_content[:200] + "..."} for doc in vector_docs[:2]],
                 "web_search_enabled": self.enable_web_search,
                 "web_search_available": self.hybrid_searcher is not None,
             }
 
             # Check if web search would be used
             if self.hybrid_searcher:
-                should_use_web = self.hybrid_searcher.should_use_web_search(
-                    vector_docs, question
-                )
+                should_use_web = self.hybrid_searcher.should_use_web_search(vector_docs, question)
                 info["would_use_web_search"] = should_use_web
 
                 if should_use_web:

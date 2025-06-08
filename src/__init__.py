@@ -1,7 +1,6 @@
-from .langchain_integration import LangchainPipeline, VectorStore, TextProcessor
-from .config import config, logger
+from .langchain_integration import LangchainPipeline, VectorStore
 
-__all__ = ["config", "logger", "LangchainPipeline", "VectorStore", "TextProcessor"]
+__all__ = ["LangchainPipeline", "VectorStore", "TextProcessor"]
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"

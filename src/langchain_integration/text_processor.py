@@ -7,7 +7,7 @@ import json
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from ..config import config, logger
+from .config import config, logger
 
 
 __author__ = "Lâm Quang Trí"

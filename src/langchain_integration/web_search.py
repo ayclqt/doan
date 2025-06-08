@@ -2,16 +2,25 @@
 Web search integration using DuckDuckGo for product information retrieval.
 """
 
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-from msgspec import Struct
-from duckduckgo_search import DDGS
-from duckduckgo_search.exceptions import (
-    DuckDuckGoSearchException,
-    RatelimitException,
-    TimeoutException,
-)
 
-from ..config import config, logger
+from .config import config, logger
+
+try:
+    from duckduckgo_search import DDGS
+    from duckduckgo_search.exceptions import (
+        DuckDuckGoSearchException,
+        RatelimitException,
+        TimeoutException,
+    )
+except ImportError:
+    DDGS = None
+    DuckDuckGoSearchException = Exception
+    RatelimitException = Exception
+    TimeoutException = Exception
+    logger.warning("duckduckgo-search not installed. Web search functionality will be disabled.")
+
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -22,9 +31,9 @@ __email__ = "quangtri.lam.9@gmail.com"
 __status__ = "Development"
 
 
-class SearchResult(Struct):
+@dataclass
+class SearchResult:
     """Data class for search results."""
-
     title: str
     body: str
     href: str
@@ -40,7 +49,7 @@ class WebSearcher:
         region: str = None,
         safesearch: str = "moderate",
         timelimit: str = None,
-        backend: str = "auto",
+        backend: str = "auto"
     ):
         """
         Initialize WebSearcher.
@@ -55,23 +64,17 @@ class WebSearcher:
         self.max_results = max_results or config.web_search_max_results
         self.region = region or config.web_search_region
         self.safesearch = safesearch
-        self.timelimit = timelimit or (
-            config.web_search_timelimit if config.web_search_timelimit else None
-        )
+        self.timelimit = timelimit or (config.web_search_timelimit if config.web_search_timelimit else None)
         self.backend = backend or config.web_search_backend
         self.logger = logger
 
         if DDGS is None:
-            self.logger.error(
-                "DuckDuckGo search is not available. Please install duckduckgo-search package."
-            )
+            self.logger.error("DuckDuckGo search is not available. Please install duckduckgo-search package.")
             self.enabled = False
         else:
             self.enabled = True
 
-    def search_product_info(
-        self, query: str, product_keywords: Optional[List[str]] = None
-    ) -> List[SearchResult]:
+    def search_product_info(self, query: str, product_keywords: Optional[List[str]] = None) -> List[SearchResult]:
         """
         Search for product information using DuckDuckGo.
 
@@ -98,7 +101,7 @@ class WebSearcher:
                     safesearch=self.safesearch,
                     max_results=self.max_results,
                     timelimit=self.timelimit,
-                    backend=self.backend,
+                    backend=self.backend
                 )
 
                 search_results = []
@@ -107,16 +110,14 @@ class WebSearcher:
                         title=result.get("title", ""),
                         body=result.get("body", ""),
                         href=result.get("href", ""),
-                        relevance_score=self._calculate_relevance(result, query),
+                        relevance_score=self._calculate_relevance(result, query)
                     )
                     search_results.append(search_result)
 
                 # Sort by relevance score
                 search_results.sort(key=lambda x: x.relevance_score, reverse=True)
 
-                self.logger.info(
-                    f"Found {len(search_results)} results for query: {enhanced_query}"
-                )
+                self.logger.info(f"Found {len(search_results)} results for query: {enhanced_query}")
                 return search_results
 
         except RatelimitException as e:
@@ -132,9 +133,7 @@ class WebSearcher:
             self.logger.error(f"Unexpected error during web search: {e}")
             return []
 
-    def _enhance_product_query(
-        self, query: str, product_keywords: Optional[List[str]] = None
-    ) -> str:
+    def _enhance_product_query(self, query: str, product_keywords: Optional[List[str]] = None) -> str:
         """
         Enhance search query with product-specific terms.
 
@@ -192,18 +191,8 @@ class WebSearcher:
         score += (body_matches / len(query_terms)) * 0.4
 
         # Bonus for product-related terms
-        product_terms = [
-            "sản phẩm",
-            "giá",
-            "thông số",
-            "đánh giá",
-            "review",
-            "mua",
-            "bán",
-        ]
-        product_matches = sum(
-            1 for term in product_terms if term in title or term in body
-        )
+        product_terms = ["sản phẩm", "giá", "thông số", "đánh giá", "review", "mua", "bán"]
+        product_matches = sum(1 for term in product_terms if term in title or term in body)
         score += min(product_matches * 0.1, 0.2)  # Max 0.2 bonus
 
         return min(score, 1.0)  # Cap at 1.0
@@ -251,9 +240,7 @@ class HybridSearcher:
             similarity_threshold: Minimum similarity score to consider vector results sufficient
         """
         self.web_searcher = web_searcher
-        self.similarity_threshold = (
-            similarity_threshold or config.web_search_similarity_threshold
-        )
+        self.similarity_threshold = similarity_threshold or config.web_search_similarity_threshold
         self.logger = logger
 
     def should_use_web_search(self, vector_results: List[Any], query: str) -> bool:
@@ -273,33 +260,19 @@ class HybridSearcher:
 
         # Check if we have enough relevant results
         if len(vector_results) < 2:
-            self.logger.info(
-                f"Only {len(vector_results)} vector results found, will supplement with web search"
-            )
+            self.logger.info(f"Only {len(vector_results)} vector results found, will supplement with web search")
             return True
 
         # If vector store has good results, we might still want web search for recent info
         # This is a simple heuristic - you can make it more sophisticated
-        time_sensitive_keywords = [
-            "giá",
-            "khuyến mãi",
-            "sale",
-            "discount",
-            "mới",
-            "2024",
-            "2025",
-        ]
+        time_sensitive_keywords = ["giá", "khuyến mãi", "sale", "discount", "mới", "2024", "2025"]
         if any(keyword in query.lower() for keyword in time_sensitive_keywords):
-            self.logger.info(
-                "Query contains time-sensitive keywords, will use web search"
-            )
+            self.logger.info("Query contains time-sensitive keywords, will use web search")
             return True
 
         return False
 
-    def combine_results(
-        self, vector_context: str, web_results: List[SearchResult]
-    ) -> str:
+    def combine_results(self, vector_context: str, web_results: List[SearchResult]) -> str:
         """
         Combine vector store and web search results into a single context.
 
@@ -318,8 +291,6 @@ class HybridSearcher:
 
         if web_results:
             combined_context.append("\n=== THÔNG TIN BỔ SUNG TỪ TÌM KIẾM WEB ===")
-            combined_context.append(
-                self.web_searcher.format_search_results(web_results)
-            )
+            combined_context.append(self.web_searcher.format_search_results(web_results))
 
         return "\n\n".join(combined_context)

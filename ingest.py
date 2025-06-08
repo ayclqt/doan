@@ -1,16 +1,12 @@
 """
-Data ingestion script using the new functional architecture.
+Data ingestion script for loading product data into the vector database.
 """
 
-import argparse
-import sys
 import os
-from pathlib import Path
+import argparse
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+from src import VectorStore, TextProcessor
 
-from src import create_application, get_logger
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -22,78 +18,55 @@ __status__ = "Development"
 
 
 def main():
-    """Run data ingestion process using functional architecture."""
+    """Run data ingestion process."""
     parser = argparse.ArgumentParser(
-        description="Ingest product data into vector database using functional architecture"
+        description="Ingest product data into vector database"
     )
     parser.add_argument(
         "--data-path",
         type=str,
         default="cleaned_data.json",
-        help="Path to the JSON data file (default: cleaned_data.json)",
+        help="Path to the JSON data file",
     )
     parser.add_argument(
-        "--recreate",
-        action="store_true",
-        help="Recreate the vector store collection (currently not implemented)",
+        "--recreate", action="store_true", help="Recreate the vector store collection"
     )
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
 
     # Check if data file exists
     if not os.path.exists(args.data_path):
-        print(f"❌ Error: Data file '{args.data_path}' not found.")
-        print(f"Please ensure the file exists in the current directory: {os.getcwd()}")
-        return 1
+        print(f"Error: Data file {args.data_path} not found.")
+        return
 
-    print("🚀 Starting data ingestion with functional architecture...")
-    print(f"📁 Data file: {args.data_path}")
+    # Initialize components
+    text_processor = TextProcessor()
+    vector_store = VectorStore()
 
-    # Initialize application
-    print("⚙️  Initializing application...")
-    app_result = create_application()
+    # Create collection if needed
+    vector_store.create_collection()
 
-    if app_result.is_failure:
-        print(f"❌ Failed to initialize application: {app_result.error}")
-        return 1
+    # Load and process data
+    print(f"Loading data from {args.data_path}")
+    raw_data = text_processor.load_data(args.data_path)
 
-    app = app_result.value
-    logger = get_logger()
+    if not raw_data:
+        print("No data found or error loading data.")
+        return
 
-    print("✅ Application initialized successfully")
+    print(f"Processing {len(raw_data)} products...")
+    processed_chunks = text_processor.process_all_products(raw_data)
 
-    # Run data ingestion
-    print("📊 Starting data ingestion...")
+    # Convert to documents for indexing
+    print("Preparing documents for indexing...")
+    documents = vector_store.prepare_documents(processed_chunks)
 
-    try:
-        ingest_result = app.ingest_data(args.data_path)
+    # Index documents
+    print("Indexing documents in vector database...")
+    vector_store.index_documents(documents)
 
-        if ingest_result.is_success:
-            indexed_count = ingest_result.value
-            print("✅ Data ingestion completed successfully!")
-            print(f"📈 Indexed {indexed_count} documents into vector database")
-
-            # Get application status for verification
-            status = app.get_status()
-            if args.verbose:
-                print(f"📋 Application status: {status}")
-
-            return 0
-        else:
-            print(f"❌ Data ingestion failed: {ingest_result.error}")
-            logger.error("Data ingestion failed", error=ingest_result.error)
-            return 1
-
-    except KeyboardInterrupt:
-        print("\n⚠️  Data ingestion interrupted by user")
-        return 1
-    except Exception as e:
-        print(f"❌ Unexpected error during data ingestion: {e}")
-        logger.error("Unexpected error during ingestion", error=e)
-        return 1
+    print("Data ingestion completed successfully.")
 
 
 if __name__ == "__main__":
-    exit_code = main()
-    sys.exit(exit_code)
+    main()
