@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=root/.cache/uv \
 ADD . /app
 RUN uv sync --frozen --no-dev
 
-FROM python:3.12-bookworm-slim
+FROM python:3.12-slim-bookworm
 
 COPY --from=builder /app /app
 
