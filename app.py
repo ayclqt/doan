@@ -13,8 +13,7 @@ from structlog.processors import StackInfoRenderer, TimeStamper, add_log_level
 from structlog.stdlib import PositionalArgumentsFormatter
 from taskiq_redis import RedisAsyncResultBackend
 
-from src import config
-from src.api.routes import auth_router, chat_router, health_router
+from src import config, auth_router, chat_router, health_router
 
 result_backend = RedisAsyncResultBackend(config.redis_url)
 broker = AioPikaBroker(config.rabbitmq_url).with_result_backend(result_backend)
