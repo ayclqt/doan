@@ -1,5 +1,5 @@
 # Use a Python image with uv pre-installed
-FROM ghcr.io/astral-sh/uv:python3.12-alpine AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 # Install the project into `/app`
 WORKDIR /app
@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=root/.cache/uv \
 ADD . /app
 RUN uv sync --frozen --no-dev
 
-FROM python:3.12-alpine
+FROM python:3.12-bookworm-slim
 
 COPY --from=builder /app /app
 
