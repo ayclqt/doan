@@ -27,4 +27,12 @@ dependencies = [
     "structlog",
     "streamlit",
     "duckduckgo-search",
+    "litestar[brotli,jwt,redis,structlog]",
+    "litestar-granian",
+    "msgspec",
+    "toolz",
+    "more-itertools",
+    "taskiq-litestar>=0.1.1",
+    "taskiq-aio-pika>=0.4.2",
+    "taskiq-redis>=1.0.9",
 ]

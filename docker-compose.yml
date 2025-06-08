@@ -8,6 +8,18 @@ services:
       - qdrant_data:/qdrant/storage
     restart: always
 
+  mq:
+    image: rabbitmq:management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: always
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
 volumes:
   qdrant_data:
-    driver: local
