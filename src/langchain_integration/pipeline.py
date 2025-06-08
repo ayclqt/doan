@@ -13,7 +13,7 @@ from langchain_core.runnables import (
 )
 from langchain_openai import ChatOpenAI
 
-from .config import config, logger
+from ..config import config, logger
 from .vectorstore import VectorStore
 from .web_search import HybridSearcher, WebSearcher
 
@@ -77,9 +77,9 @@ class LangchainPipeline:
         1. Trả lời ngắn gọn, chính xác và chuyên nghiệp.
         2. Ưu tiên thông tin từ cơ sở dữ liệu sản phẩm (nếu có).
         3. Có thể tham khảo thông tin bổ sung từ tìm kiếm web để cung cấp thông tin cập nhật.
-        4. Nếu không tìm thấy thông tin trong bối cảnh, hãy nói "Tôi không có thông tin về điều này."
+        4. Nếu không tìm thấy thông tin trong bối cảnh, hãy sử dụng tìm kiếm web để tìm thông tin liên quan đến lĩnh vực điện tử.
         5. Nếu người dùng yêu cầu so sánh các sản phẩm, hãy so sánh dựa trên các thông số kỹ thuật có sẵn.
-        6. Khi sử dụng thông tin từ web, hãy ghi rõ nguồn tham khảo.
+        6. Chỉ trả lời "Tôi không có thông tin về điều này" khi câu hỏi hoàn toàn không liên quan đến lĩnh vực điện tử hoặc sản phẩm.
         """
 
         rag_prompt = ChatPromptTemplate.from_messages(
@@ -97,10 +97,30 @@ class LangchainPipeline:
             vector_docs = retriever.invoke(question)
             vector_context = self._format_vector_context(vector_docs)
 
-            # Check if we need web search
-            if (self.hybrid_searcher and
-                self.hybrid_searcher.should_use_web_search(vector_docs, question)):
+            # Check if question is related to electronics field
+            electronics_keywords = [
+                "điện tử", "công nghệ", "smartphone", "laptop", "máy tính", "điện thoại", 
+                "tablet", "smartwatch", "tai nghe", "loa", "camera", "tivi", "smart tv",
+                "gaming", "console", "pc", "macbook", "iphone", "samsung", "xiaomi",
+                "oppo", "vivo", "realme", "asus", "acer", "dell", "hp", "lenovo",
+                "sản phẩm", "mua", "bán", "giá", "thông số", "cấu hình"
+            ]
+            
+            is_electronics_related = any(keyword in question.lower() for keyword in electronics_keywords)
 
+            # Always use web search for electronics-related queries when vector results are insufficient
+            # or when explicitly needed for comprehensive answers
+            should_search = False
+            
+            if self.hybrid_searcher:
+                # Check if we should use web search based on improved logic
+                should_search = self.hybrid_searcher.should_use_web_search(vector_docs, question)
+                
+                # Force web search for electronics queries with poor vector results
+                if is_electronics_related and (not vector_docs or len(vector_docs) < 2):
+                    should_search = True
+                    
+            if should_search and self.web_searcher:
                 # Perform web search
                 web_results = self.web_searcher.search_product_info(question)
 

@@ -10,7 +10,7 @@ from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 
-from .config import config, logger
+from ..config import config, logger
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"

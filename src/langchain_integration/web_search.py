@@ -5,7 +5,7 @@ Web search integration using DuckDuckGo for product information retrieval.
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from .config import config, logger
+from ..config import config, logger
 
 try:
     from duckduckgo_search import DDGS
@@ -213,11 +213,9 @@ class WebSearcher:
         formatted_results = []
         for i, result in enumerate(results, 1):
             formatted_result = f"""
-Kết quả tìm kiếm {i}:
-Tiêu đề: {result.title}
-Nội dung: {result.body}
-Nguồn: {result.href}
-Độ phù hợp: {result.relevance_score:.2f}
+Thông tin {i}:
+{result.title}
+{result.body}
 """
             formatted_results.append(formatted_result.strip())
 
@@ -254,20 +252,44 @@ class HybridSearcher:
         Returns:
             True if web search should be used
         """
+        # Always use web search if no vector results found
         if not vector_results:
             self.logger.info("No vector results found, will use web search")
             return True
 
-        # Check if we have enough relevant results
-        if len(vector_results) < 2:
-            self.logger.info(f"Only {len(vector_results)} vector results found, will supplement with web search")
+        # Always use web search if we have insufficient results
+        if len(vector_results) < 3:
+            self.logger.info(f"Only {len(vector_results)} vector results found, will use web search for better coverage")
             return True
 
-        # If vector store has good results, we might still want web search for recent info
-        # This is a simple heuristic - you can make it more sophisticated
-        time_sensitive_keywords = ["giá", "khuyến mãi", "sale", "discount", "mới", "2024", "2025"]
+        # Check if query is related to electronics/tech field
+        electronics_keywords = [
+            "điện tử", "công nghệ", "smartphone", "laptop", "máy tính", "điện thoại", 
+            "tablet", "smartwatch", "tai nghe", "loa", "camera", "tivi", "smart tv",
+            "gaming", "console", "pc", "macbook", "iphone", "samsung", "xiaomi",
+            "oppo", "vivo", "realme", "asus", "acer", "dell", "hp", "lenovo"
+        ]
+        
+        is_electronics_related = any(keyword in query.lower() for keyword in electronics_keywords)
+        
+        # If query is electronics-related but vector results seem insufficient, use web search
+        if is_electronics_related:
+            # Check if vector results have enough content (simple heuristic)
+            total_content_length = sum(len(doc.page_content) for doc in vector_results)
+            if total_content_length < 500:  # Less than 500 characters total
+                self.logger.info("Vector results seem insufficient for electronics query, will use web search")
+                return True
+
+        # Always use web search for time-sensitive queries
+        time_sensitive_keywords = ["giá", "khuyến mãi", "sale", "discount", "mới", "2024", "2025", "hiện tại", "bây giờ"]
         if any(keyword in query.lower() for keyword in time_sensitive_keywords):
             self.logger.info("Query contains time-sensitive keywords, will use web search")
+            return True
+
+        # Use web search for comparison queries
+        comparison_keywords = ["so sánh", "compare", "vs", "tốt hơn", "khác nhau", "nên chọn"]
+        if any(keyword in query.lower() for keyword in comparison_keywords):
+            self.logger.info("Query is asking for comparison, will use web search for comprehensive info")
             return True
 
         return False
@@ -286,11 +308,11 @@ class HybridSearcher:
         combined_context = []
 
         if vector_context and vector_context.strip():
-            combined_context.append("=== THÔNG TIN TỪ CƠ SỞ DỮ LIỆU SẢN PHẨM ===")
             combined_context.append(vector_context)
 
         if web_results:
-            combined_context.append("\n=== THÔNG TIN BỔ SUNG TỪ TÌM KIẾM WEB ===")
+            if combined_context:  # Add separator only if we have vector context
+                combined_context.append("")
             combined_context.append(self.web_searcher.format_search_results(web_results))
 
         return "\n\n".join(combined_context)
