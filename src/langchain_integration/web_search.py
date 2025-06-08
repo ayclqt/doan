@@ -2,11 +2,10 @@
 Web search integration using DuckDuckGo for product information retrieval.
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from .config import config
+from .config import config, logger
 
 try:
     from duckduckgo_search import DDGS
@@ -20,7 +19,7 @@ except ImportError:
     DuckDuckGoSearchException = Exception
     RatelimitException = Exception
     TimeoutException = Exception
-    logging.warning("duckduckgo-search not installed. Web search functionality will be disabled.")
+    logger.warning("duckduckgo-search not installed. Web search functionality will be disabled.")
 
 
 __author__ = "Lâm Quang Trí"
@@ -67,7 +66,7 @@ class WebSearcher:
         self.safesearch = safesearch
         self.timelimit = timelimit or (config.web_search_timelimit if config.web_search_timelimit else None)
         self.backend = backend or config.web_search_backend
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
 
         if DDGS is None:
             self.logger.error("DuckDuckGo search is not available. Please install duckduckgo-search package.")
@@ -242,7 +241,7 @@ class HybridSearcher:
         """
         self.web_searcher = web_searcher
         self.similarity_threshold = similarity_threshold or config.web_search_similarity_threshold
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
 
     def should_use_web_search(self, vector_results: List[Any], query: str) -> bool:
         """

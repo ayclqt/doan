@@ -7,7 +7,7 @@ import json
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from .config import config
+from .config import config, logger
 
 
 __author__ = "Lâm Quang Trí"
@@ -43,10 +43,10 @@ class TextProcessor:
         try:
             with open(file_path, "r", encoding="utf-8") as file:
                 data = json.load(file)
-                print(f"Loaded {len(data)} products from {file_path}")
+                logger.info(f"Loaded {len(data)} products from {file_path}")
                 return data
         except Exception as e:
-            print(f"Error loading data: {e}")
+            logger.error("Error loading data", error=e)
             return []
 
     def product_to_text(self, product: Dict[str, Any]) -> str:
@@ -105,5 +105,5 @@ class TextProcessor:
             product_chunks = self.chunk_product(product)
             all_chunks.extend(product_chunks)
 
-        print(f"Created {len(all_chunks)} chunks from {len(products)} products")
+        logger.info(f"Created {len(all_chunks)} chunks from {len(products)} products")
         return all_chunks

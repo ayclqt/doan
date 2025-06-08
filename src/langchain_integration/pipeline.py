@@ -13,7 +13,7 @@ from langchain_core.runnables import (
 )
 from langchain_openai import ChatOpenAI
 
-from .config import config
+from .config import config, logger
 from .vectorstore import VectorStore
 from .web_search import HybridSearcher, WebSearcher
 
@@ -142,7 +142,7 @@ class LangchainPipeline:
             response = self.pipeline.invoke(question)
             return response
         except Exception as e:
-            print(f"Error answering question: {e}")
+            logger.error("Error answering question", error=e)
             return "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi của bạn."
 
     def answer_question_stream(self, question: str) -> Iterator[str]:
@@ -151,7 +151,7 @@ class LangchainPipeline:
             for chunk in self.pipeline.stream(question):
                 yield chunk
         except Exception as e:
-            print(f"Error streaming answer: {e}")
+            logger.error("Error streaming answer", error=e)
             yield "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi của bạn."
 
     def add_conversation_memory(self, memory):

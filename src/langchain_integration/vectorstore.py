@@ -3,15 +3,14 @@ Vector database integration with Qdrant.
 """
 
 import json
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
-from langchain_qdrant import QdrantVectorStore
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
+from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 
-from .config import config
-
+from .config import config, logger
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -56,9 +55,9 @@ class VectorStore:
                     distance=Distance.COSINE,
                 ),
             )
-            print(f"Collection '{self.collection_name}' created successfully.")
+            logger.info("Collection created successfully.", collection=self.collection_name)
         else:
-            print(f"Collection '{self.collection_name}' already exists.")
+            logger.warning("Collection already exists.", collection=self.collection_name)
 
     def initialize_vectorstore(self) -> QdrantVectorStore:
         """Initialize the vector store for LangChain operations."""
@@ -127,7 +126,7 @@ class VectorStore:
 
         # Add texts to the vector store
         self.vectorstore.add_texts(texts=texts, metadatas=metadatas)
-        print(f"Indexed {len(documents)} documents into Qdrant.")
+        logger.info(f"Indexed {len(documents)} documents into Qdrant.")
 
     def similarity_search(self, query: str, k: int = 3) -> List[Dict]:
         """Perform similarity search on the vector database."""
