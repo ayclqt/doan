@@ -59,4 +59,3 @@ coverage.xml
 *.docx
 /test.py
 *.json
-*.pkl
