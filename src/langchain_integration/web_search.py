@@ -19,7 +19,9 @@ except ImportError:
     DuckDuckGoSearchException = Exception
     RatelimitException = Exception
     TimeoutException = Exception
-    logger.warning("duckduckgo-search not installed. Web search functionality will be disabled.")
+    logger.warning(
+        "duckduckgo-search not installed. Web search functionality will be disabled."
+    )
 
 
 __author__ = "Lâm Quang Trí"
@@ -34,6 +36,7 @@ __status__ = "Development"
 @dataclass
 class SearchResult:
     """Data class for search results."""
+
     title: str
     body: str
     href: str
@@ -49,7 +52,7 @@ class WebSearcher:
         region: str = None,
         safesearch: str = "moderate",
         timelimit: str = None,
-        backend: str = "auto"
+        backend: str = "auto",
     ):
         """
         Initialize WebSearcher.
@@ -64,17 +67,23 @@ class WebSearcher:
         self.max_results = max_results or config.web_search_max_results
         self.region = region or config.web_search_region
         self.safesearch = safesearch
-        self.timelimit = timelimit or (config.web_search_timelimit if config.web_search_timelimit else None)
+        self.timelimit = timelimit or (
+            config.web_search_timelimit if config.web_search_timelimit else None
+        )
         self.backend = backend or config.web_search_backend
         self.logger = logger
 
         if DDGS is None:
-            self.logger.error("DuckDuckGo search is not available. Please install duckduckgo-search package.")
+            self.logger.error(
+                "DuckDuckGo search is not available. Please install duckduckgo-search package."
+            )
             self.enabled = False
         else:
             self.enabled = True
 
-    def search_product_info(self, query: str, product_keywords: Optional[List[str]] = None) -> List[SearchResult]:
+    def search_product_info(
+        self, query: str, product_keywords: Optional[List[str]] = None
+    ) -> List[SearchResult]:
         """
         Search for product information using DuckDuckGo.
 
@@ -101,7 +110,7 @@ class WebSearcher:
                     safesearch=self.safesearch,
                     max_results=self.max_results,
                     timelimit=self.timelimit,
-                    backend=self.backend
+                    backend=self.backend,
                 )
 
                 search_results = []
@@ -110,14 +119,16 @@ class WebSearcher:
                         title=result.get("title", ""),
                         body=result.get("body", ""),
                         href=result.get("href", ""),
-                        relevance_score=self._calculate_relevance(result, query)
+                        relevance_score=self._calculate_relevance(result, query),
                     )
                     search_results.append(search_result)
 
                 # Sort by relevance score
                 search_results.sort(key=lambda x: x.relevance_score, reverse=True)
 
-                self.logger.info(f"Found {len(search_results)} results for query: {enhanced_query}")
+                self.logger.info(
+                    f"Found {len(search_results)} results for query: {enhanced_query}"
+                )
                 return search_results
 
         except RatelimitException as e:
@@ -133,7 +144,9 @@ class WebSearcher:
             self.logger.error(f"Unexpected error during web search: {e}")
             return []
 
-    def _enhance_product_query(self, query: str, product_keywords: Optional[List[str]] = None) -> str:
+    def _enhance_product_query(
+        self, query: str, product_keywords: Optional[List[str]] = None
+    ) -> str:
         """
         Enhance search query with product-specific terms.
 
@@ -191,8 +204,18 @@ class WebSearcher:
         score += (body_matches / len(query_terms)) * 0.4
 
         # Bonus for product-related terms
-        product_terms = ["sản phẩm", "giá", "thông số", "đánh giá", "review", "mua", "bán"]
-        product_matches = sum(1 for term in product_terms if term in title or term in body)
+        product_terms = [
+            "sản phẩm",
+            "giá",
+            "thông số",
+            "đánh giá",
+            "review",
+            "mua",
+            "bán",
+        ]
+        product_matches = sum(
+            1 for term in product_terms if term in title or term in body
+        )
         score += min(product_matches * 0.1, 0.2)  # Max 0.2 bonus
 
         return min(score, 1.0)  # Cap at 1.0
@@ -238,7 +261,9 @@ class HybridSearcher:
             similarity_threshold: Minimum similarity score to consider vector results sufficient
         """
         self.web_searcher = web_searcher
-        self.similarity_threshold = similarity_threshold or config.web_search_similarity_threshold
+        self.similarity_threshold = (
+            similarity_threshold or config.web_search_similarity_threshold
+        )
         self.logger = logger
 
     def should_use_web_search(self, vector_results: List[Any], query: str) -> bool:
@@ -259,42 +284,95 @@ class HybridSearcher:
 
         # Always use web search if we have insufficient results
         if len(vector_results) < 3:
-            self.logger.info(f"Only {len(vector_results)} vector results found, will use web search for better coverage")
+            self.logger.info(
+                f"Only {len(vector_results)} vector results found, will use web search for better coverage"
+            )
             return True
 
         # Check if query is related to electronics/tech field
         electronics_keywords = [
-            "điện tử", "công nghệ", "smartphone", "laptop", "máy tính", "điện thoại", 
-            "tablet", "smartwatch", "tai nghe", "loa", "camera", "tivi", "smart tv",
-            "gaming", "console", "pc", "macbook", "iphone", "samsung", "xiaomi",
-            "oppo", "vivo", "realme", "asus", "acer", "dell", "hp", "lenovo"
+            "điện tử",
+            "công nghệ",
+            "smartphone",
+            "laptop",
+            "máy tính",
+            "điện thoại",
+            "tablet",
+            "smartwatch",
+            "tai nghe",
+            "loa",
+            "camera",
+            "tivi",
+            "smart tv",
+            "gaming",
+            "console",
+            "pc",
+            "macbook",
+            "iphone",
+            "samsung",
+            "xiaomi",
+            "oppo",
+            "vivo",
+            "realme",
+            "asus",
+            "acer",
+            "dell",
+            "hp",
+            "lenovo",
         ]
-        
-        is_electronics_related = any(keyword in query.lower() for keyword in electronics_keywords)
-        
+
+        is_electronics_related = any(
+            keyword in query.lower() for keyword in electronics_keywords
+        )
+
         # If query is electronics-related but vector results seem insufficient, use web search
         if is_electronics_related:
             # Check if vector results have enough content (simple heuristic)
             total_content_length = sum(len(doc.page_content) for doc in vector_results)
             if total_content_length < 500:  # Less than 500 characters total
-                self.logger.info("Vector results seem insufficient for electronics query, will use web search")
+                self.logger.info(
+                    "Vector results seem insufficient for electronics query, will use web search"
+                )
                 return True
 
         # Always use web search for time-sensitive queries
-        time_sensitive_keywords = ["giá", "khuyến mãi", "sale", "discount", "mới", "2024", "2025", "hiện tại", "bây giờ"]
+        time_sensitive_keywords = [
+            "giá",
+            "khuyến mãi",
+            "sale",
+            "discount",
+            "mới",
+            "2024",
+            "2025",
+            "hiện tại",
+            "bây giờ",
+        ]
         if any(keyword in query.lower() for keyword in time_sensitive_keywords):
-            self.logger.info("Query contains time-sensitive keywords, will use web search")
+            self.logger.info(
+                "Query contains time-sensitive keywords, will use web search"
+            )
             return True
 
         # Use web search for comparison queries
-        comparison_keywords = ["so sánh", "compare", "vs", "tốt hơn", "khác nhau", "nên chọn"]
+        comparison_keywords = [
+            "so sánh",
+            "compare",
+            "vs",
+            "tốt hơn",
+            "khác nhau",
+            "nên chọn",
+        ]
         if any(keyword in query.lower() for keyword in comparison_keywords):
-            self.logger.info("Query is asking for comparison, will use web search for comprehensive info")
+            self.logger.info(
+                "Query is asking for comparison, will use web search for comprehensive info"
+            )
             return True
 
         return False
 
-    def combine_results(self, vector_context: str, web_results: List[SearchResult]) -> str:
+    def combine_results(
+        self, vector_context: str, web_results: List[SearchResult]
+    ) -> str:
         """
         Combine vector store and web search results into a single context.
 
@@ -313,6 +391,8 @@ class HybridSearcher:
         if web_results:
             if combined_context:  # Add separator only if we have vector context
                 combined_context.append("")
-            combined_context.append(self.web_searcher.format_search_results(web_results))
+            combined_context.append(
+                self.web_searcher.format_search_results(web_results)
+            )
 
         return "\n\n".join(combined_context)

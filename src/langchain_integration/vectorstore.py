@@ -55,9 +55,13 @@ class VectorStore:
                     distance=Distance.COSINE,
                 ),
             )
-            logger.info("Collection created successfully.", collection=self.collection_name)
+            logger.info(
+                "Collection created successfully.", collection=self.collection_name
+            )
         else:
-            logger.warning("Collection already exists.", collection=self.collection_name)
+            logger.warning(
+                "Collection already exists.", collection=self.collection_name
+            )
 
     def initialize_vectorstore(self) -> QdrantVectorStore:
         """Initialize the vector store for LangChain operations."""

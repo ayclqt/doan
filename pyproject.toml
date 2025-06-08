@@ -27,4 +27,11 @@ dependencies = [
     "structlog",
     "streamlit",
     "duckduckgo-search",
+    # API dependencies
+    "litestar[brotli,cryptography,jwt,standard,structlog]",
+    "taskiq-litestar",
+    "taskiq-aio-pika",
+    "taskiq-redis",
+    "litestar-granian",
+    "bcrypt",
 ]

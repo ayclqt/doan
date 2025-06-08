@@ -14,6 +14,7 @@ from structlog.stdlib import PositionalArgumentsFormatter
 from taskiq_redis import RedisAsyncResultBackend
 
 from src import config
+from src.api.routes import auth_router, chat_router, health_router
 
 result_backend = RedisAsyncResultBackend(config.redis_url)
 broker = AioPikaBroker(config.rabbitmq_url).with_result_backend(result_backend)
@@ -36,11 +37,22 @@ logging_config = StructLoggingConfig(
     cache_logger_on_first_use=True,
 )
 app = Litestar(
-    plugins=[StructlogPlugin(StructlogConfig(logging_config)), GranianPlugin()],
+    route_handlers=[
+        auth_router,
+        chat_router,
+        health_router,
+    ],
+    plugins=[StructlogPlugin(StructlogConfig(logging_config))],
+    # middleware=[
+    #     LoggingMiddleware,
+    # ],
+    # cors_config=CORSMiddleware.get_cors_config(),
     compression_config=CompressionConfig(backend="brotli", brotli_gzip_fallback=False),
     openapi_config=OpenAPIConfig(
         title="Chatbot hỗ trợ giới thiệu sản phẩm",
-        version="0.0.1",
+        version="1.0.0",
+        description="API cho hệ thống chatbot hỗ trợ tư vấn sản phẩm điện tử sử dụng LangChain và Qdrant",
         render_plugins=[ScalarRenderPlugin()],
     ),
+    # debug=config.deploy_env in ["dev", "development", "develop", "local"],
 )

@@ -1,3 +1,5 @@
+import secrets
+
 import structlog
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
@@ -43,6 +45,15 @@ class Config(BaseSettings):
     web_search_timelimit: str = ""
     web_search_backend: str = "auto"
     web_search_similarity_threshold: float = 0.7
+
+    # JWT and Authentication settings
+    secret_key: str = secrets.token_urlsafe(32)
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
+
+    # CORS settings
+    cors_allowed_origins: str = "*"
 
     deploy_env: str = "dev"
 

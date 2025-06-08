@@ -54,12 +54,19 @@ class LangchainPipeline:
         self.vector_store.initialize_vectorstore()
 
         # Initialize web search components
-        self.enable_web_search = enable_web_search if enable_web_search is not None else config.web_search_enabled
+        self.enable_web_search = (
+            enable_web_search
+            if enable_web_search is not None
+            else config.web_search_enabled
+        )
         self.web_searcher = WebSearcher() if self.enable_web_search else None
-        self.hybrid_searcher = HybridSearcher(
-            self.web_searcher,
-            similarity_threshold=web_search_threshold
-        ) if self.enable_web_search and self.web_searcher and self.web_searcher.is_available() else None
+        self.hybrid_searcher = (
+            HybridSearcher(self.web_searcher, similarity_threshold=web_search_threshold)
+            if self.enable_web_search
+            and self.web_searcher
+            and self.web_searcher.is_available()
+            else None
+        )
 
         # Set up the pipeline
         self.pipeline = self._create_pipeline()
@@ -99,27 +106,60 @@ class LangchainPipeline:
 
             # Check if question is related to electronics field
             electronics_keywords = [
-                "điện tử", "công nghệ", "smartphone", "laptop", "máy tính", "điện thoại", 
-                "tablet", "smartwatch", "tai nghe", "loa", "camera", "tivi", "smart tv",
-                "gaming", "console", "pc", "macbook", "iphone", "samsung", "xiaomi",
-                "oppo", "vivo", "realme", "asus", "acer", "dell", "hp", "lenovo",
-                "sản phẩm", "mua", "bán", "giá", "thông số", "cấu hình"
+                "điện tử",
+                "công nghệ",
+                "smartphone",
+                "laptop",
+                "máy tính",
+                "điện thoại",
+                "tablet",
+                "smartwatch",
+                "tai nghe",
+                "loa",
+                "camera",
+                "tivi",
+                "smart tv",
+                "gaming",
+                "console",
+                "pc",
+                "macbook",
+                "iphone",
+                "samsung",
+                "xiaomi",
+                "oppo",
+                "vivo",
+                "realme",
+                "asus",
+                "acer",
+                "dell",
+                "hp",
+                "lenovo",
+                "sản phẩm",
+                "mua",
+                "bán",
+                "giá",
+                "thông số",
+                "cấu hình",
             ]
-            
-            is_electronics_related = any(keyword in question.lower() for keyword in electronics_keywords)
+
+            is_electronics_related = any(
+                keyword in question.lower() for keyword in electronics_keywords
+            )
 
             # Always use web search for electronics-related queries when vector results are insufficient
             # or when explicitly needed for comprehensive answers
             should_search = False
-            
+
             if self.hybrid_searcher:
                 # Check if we should use web search based on improved logic
-                should_search = self.hybrid_searcher.should_use_web_search(vector_docs, question)
-                
+                should_search = self.hybrid_searcher.should_use_web_search(
+                    vector_docs, question
+                )
+
                 # Force web search for electronics queries with poor vector results
                 if is_electronics_related and (not vector_docs or len(vector_docs) < 2):
                     should_search = True
-                    
+
             if should_search and self.web_searcher:
                 # Perform web search
                 web_results = self.web_searcher.search_product_info(question)
@@ -150,10 +190,7 @@ class LangchainPipeline:
             return ""
 
         return "\n\n".join(
-            [
-                f"Sản phẩm {i + 1}:\n" + doc.page_content
-                for i, doc in enumerate(docs)
-            ]
+            [f"Sản phẩm {i + 1}:\n" + doc.page_content for i, doc in enumerate(docs)]
         )
 
     def answer_question(self, question: str) -> str:
@@ -191,14 +228,19 @@ class LangchainPipeline:
 
             info = {
                 "vector_results_count": len(vector_docs),
-                "vector_results": [{"content": doc.page_content[:200] + "..."} for doc in vector_docs[:2]],
+                "vector_results": [
+                    {"content": doc.page_content[:200] + "..."}
+                    for doc in vector_docs[:2]
+                ],
                 "web_search_enabled": self.enable_web_search,
                 "web_search_available": self.hybrid_searcher is not None,
             }
 
             # Check if web search would be used
             if self.hybrid_searcher:
-                should_use_web = self.hybrid_searcher.should_use_web_search(vector_docs, question)
+                should_use_web = self.hybrid_searcher.should_use_web_search(
+                    vector_docs, question
+                )
                 info["would_use_web_search"] = should_use_web
 
                 if should_use_web:
