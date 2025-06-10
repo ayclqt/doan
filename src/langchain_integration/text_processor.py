@@ -2,13 +2,12 @@
 Text processing utilities for preparing data for vector embedding.
 """
 
-from typing import Dict, List, Any
 import json
+from typing import Any, Dict, List
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from ..config import config, logger
-
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"

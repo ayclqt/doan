@@ -2,15 +2,15 @@
 Routes module for the API.
 """
 
-from .auth import auth_router
-from .chat import chat_router
-from .health import health_router
+from litestar import Router
 
-__all__ = [
-    "auth_router",
-    "chat_router",
-    "health_router",
-]
+from .auth import Auth
+from .chat import Chat
+from .health import Health
+
+routers = Router(path="/", route_handlers=[Auth, Chat, Health])
+
+__all__ = ["routers"]
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"

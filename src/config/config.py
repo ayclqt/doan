@@ -4,7 +4,6 @@ import structlog
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
-
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
 __credits__ = ["Lâm Quang Trí"]
@@ -17,6 +16,7 @@ __status__ = "Development"
 class Config(BaseSettings):
     """Configuration settings for the application."""
 
+    prefix: str = "/"
     openai_api_key: str = ""
     openai_base_url: str = "https://api.x.ai/v1"
 
@@ -47,8 +47,10 @@ class Config(BaseSettings):
     web_search_similarity_threshold: float = 0.7
 
     # JWT and Authentication settings
-    secret_key: str = secrets.token_urlsafe(32)
-    algorithm: str = "HS256"
+    jwt_secret: str = secrets.token_urlsafe(32)
+    jwt_algorithm: str = "HS256"
+    api_user: str = "admin"
+    api_pass: str = "admin"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 

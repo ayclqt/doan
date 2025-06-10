@@ -4,10 +4,10 @@ Export script for Qdrant vector database.
 This script exports a Qdrant collection to a portable file format.
 """
 
-import pickle
 import argparse
-from qdrant_client import QdrantClient
+import pickle
 
+from qdrant_client import QdrantClient
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"

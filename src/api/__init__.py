@@ -2,34 +2,31 @@
 API module for the chatbot application.
 """
 
-from .auth import AuthHandler, get_current_user, require_auth, optional_auth
-from .routes import auth_router, chat_router, health_router
+from .auth import jwt_auth
+from .routes import routers
 from .schemas import (
     ChatRequest,
     ChatResponse,
+    ErrorResponse,
     LoginRequest,
     LoginResponse,
-    UserResponse,
-    ErrorResponse,
+    RegisterRequest,
+    RegisterResponse,
     SuccessResponse,
 )
 
 __all__ = [
     # Auth
-    "AuthHandler",
-    "get_current_user",
-    "require_auth",
-    "optional_auth",
+    "jwt_auth",
     # Routes
-    "auth_router",
-    "chat_router",
-    "health_router",
+    "routers",
     # Schemas
     "ChatRequest",
     "ChatResponse",
     "LoginRequest",
     "LoginResponse",
-    "UserResponse",
+    "RegisterRequest",
+    "RegisterResponse",
     "ErrorResponse",
     "SuccessResponse",
 ]

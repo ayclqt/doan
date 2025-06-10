@@ -4,11 +4,11 @@ Utility script to check and verify LangChain and Qdrant setup.
 This script helps diagnose common issues with the implementation.
 """
 
-import os
-import json
 import argparse
-from dotenv import load_dotenv
+import json
+import os
 
+from dotenv import load_dotenv
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -133,10 +133,10 @@ def check_qdrant_connection():
                     "   Run 'python ingest.py' to create the collection and index data"
                 )
         except Exception as e:
-            print(f"❌ Error checking collections: {str(e)}")
+            print(f"❌ Error checking collections: {e!s}")
     except Exception as e:
         print(f"❌ Failed to connect to Qdrant at {url}:{port}")
-        print(f"   Error: {str(e)}")
+        print(f"   Error: {e!s}")
         print("\n   Is Qdrant running? Try: docker-compose up -d")
 
 
@@ -162,7 +162,7 @@ def check_data():
                     print(f"\n   Sample product: {sample.get('Tên', 'Unknown')}")
                     print(f"   Fields: {', '.join(list(sample.keys())[:5])}...")
         except Exception as e:
-            print(f"❌ Error reading data file: {str(e)}")
+            print(f"❌ Error reading data file: {e!s}")
     else:
         print(f"❌ Data file not found: {data_path}")
 
@@ -172,8 +172,8 @@ def check_langchain_integration():
     print("\n=== Checking LangChain Integration ===")
 
     try:
-        from src.langchain_integration.vectorstore import VectorStore
         from src.langchain_integration.text_processor import TextProcessor
+        from src.langchain_integration.vectorstore import VectorStore
 
         print("✅ LangChain integration modules imported successfully")
 
@@ -182,7 +182,7 @@ def check_langchain_integration():
             TextProcessor()
             print("✅ TextProcessor initialized")
         except Exception as e:
-            print(f"❌ Error initializing TextProcessor: {str(e)}")
+            print(f"❌ Error initializing TextProcessor: {e!s}")
 
         try:
             vector_store = VectorStore()
@@ -190,9 +190,9 @@ def check_langchain_integration():
             print(f"   Collection name: {vector_store.collection_name}")
             print(f"   Embedding model: {vector_store.embedding_model.model_name}")
         except Exception as e:
-            print(f"❌ Error initializing VectorStore: {str(e)}")
+            print(f"❌ Error initializing VectorStore: {e!s}")
     except ImportError as e:
-        print(f"❌ Error importing LangChain integration modules: {str(e)}")
+        print(f"❌ Error importing LangChain integration modules: {e!s}")
         print("   Check that the module structure is correct")
 
 
@@ -231,7 +231,7 @@ def run_test_query(query="Điện thoại nào có camera tốt nhất trong t�
                 )
                 return
         except Exception as e:
-            print(f"❌ Error checking Qdrant: {str(e)}")
+            print(f"❌ Error checking Qdrant: {e!s}")
             return
 
         # Initialize pipeline
@@ -245,9 +245,9 @@ def run_test_query(query="Điện thoại nào có camera tốt nhất trong t�
             print(f"Q: {query}")
             print(f"A: {answer}")
         except Exception as e:
-            print(f"❌ Error processing query: {str(e)}")
+            print(f"❌ Error processing query: {e!s}")
     except ImportError as e:
-        print(f"❌ Error importing modules: {str(e)}")
+        print(f"❌ Error importing modules: {e!s}")
 
 
 def main():

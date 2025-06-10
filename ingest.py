@@ -2,11 +2,10 @@
 Data ingestion script for loading product data into the vector database.
 """
 
-import os
 import argparse
+import os
 
-from src import VectorStore, TextProcessor
-
+from src import TextProcessor, VectorStore
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"

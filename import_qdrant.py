@@ -4,11 +4,11 @@ Import script for Qdrant vector database export.
 This script imports a previously exported Qdrant collection into a local Qdrant instance.
 """
 
-import pickle
 import argparse
+import pickle
+
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
-
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"

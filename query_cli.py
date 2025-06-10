@@ -4,19 +4,19 @@ CLI tool để truy vấn hệ thống hỏi đáp sản phẩm sử dụng Type
 
 import os
 import time
-import typer
-from typing import Optional
 from enum import Enum
+from typing import Optional
+
+import typer
+from rich import print as rprint
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt
-from rich.markdown import Markdown
-from rich import print as rprint
 from rich.table import Table
 
 from src import LangchainPipeline, VectorStore
-
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"

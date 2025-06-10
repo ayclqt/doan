@@ -2,7 +2,8 @@
 Chat schemas cho chatbot interactions.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from msgspec import Struct
 
 
@@ -13,7 +14,7 @@ class ChatRequest(Struct):
     conversation_id: str | None = None
     stream: bool = False
     include_search_info: bool = False
-    web_search_enabled: Optional[bool] = None
+    web_search_enabled: bool | None = None
 
 
 class ChatResponse(Struct):
@@ -32,8 +33,8 @@ class ChatStreamChunk(Struct):
 
     type: str  # "chunk", "start", "end", "error"
     content: str
-    conversation_id: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    conversation_id: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class ChatStreamResponse(Struct):
@@ -42,7 +43,7 @@ class ChatStreamResponse(Struct):
     conversation_id: str
     message: str
     started_at: str
-    stream_url: Optional[str] = None
+    stream_url: str | None = None
 
 
 class ConversationHistory(Struct):
@@ -53,14 +54,14 @@ class ConversationHistory(Struct):
     response: str
     timestamp: str
     response_time: float
-    search_info: Optional[Dict[str, Any]] = None
+    search_info: dict[str, Any] | None = None
 
 
 class ChatHistoryResponse(Struct):
     """Schema cho chat history response."""
 
     conversation_id: str
-    messages: List[ConversationHistory]
+    messages: list[ConversationHistory]
     total_messages: int
     created_at: str
     last_updated: str
@@ -70,27 +71,27 @@ class SearchInfoResponse(Struct):
     """Schema cho search information."""
 
     vector_results_count: int
-    vector_results: List[Dict[str, Any]]
+    vector_results: list[dict[str, Any]]
     web_search_enabled: bool
     web_search_available: bool
-    would_use_web_search: Optional[bool] = None
-    web_results_count: Optional[int] = None
-    web_results: Optional[List[Dict[str, Any]]] = None
+    would_use_web_search: bool | None = None
+    web_results_count: int | None = None
+    web_results: list[dict[str, Any]] | None = None
 
 
 class ConversationCreate(Struct):
     """Schema cho tạo conversation mới."""
 
-    title: Optional[str] = None
-    description: Optional[str] = None
+    title: str | None = None
+    description: str | None = None
 
 
 class ConversationResponse(Struct):
     """Schema cho conversation response."""
 
     id: str
-    title: Optional[str]
-    description: Optional[str]
+    title: str | None
+    description: str | None
     created_at: str
     last_updated: str
     message_count: int
@@ -99,8 +100,8 @@ class ConversationResponse(Struct):
 class ConversationUpdate(Struct):
     """Schema cho update conversation."""
 
-    title: Optional[str] = None
-    description: Optional[str] = None
+    title: str | None = None
+    description: str | None = None
 
 
 class ChatSettings(Struct):
@@ -123,14 +124,14 @@ class QuickReply(Struct):
     """Schema cho quick replies."""
 
     text: str
-    payload: Optional[str] = None
+    payload: str | None = None
 
 
 class ChatSuggestion(Struct):
     """Schema cho chat suggestions."""
 
-    suggestions: List[str]
-    context: Optional[str] = None
+    suggestions: list[str]
+    context: str | None = None
 
 
 class ChatMetrics(Struct):
@@ -140,4 +141,4 @@ class ChatMetrics(Struct):
     total_messages: int
     average_response_time: float
     web_search_usage: float
-    most_common_topics: List[str]
+    most_common_topics: list[str]

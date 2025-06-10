@@ -1,21 +1,15 @@
-from .config import config, logger
-from .langchain_integration import LangchainPipeline, VectorStore, TextProcessor
 from .api import (
-    AuthHandler,
-    get_current_user,
-    require_auth,
-    optional_auth,
-    auth_router,
-    chat_router,
-    health_router,
     ChatRequest,
     ChatResponse,
+    ErrorResponse,
     LoginRequest,
     LoginResponse,
-    UserResponse,
-    ErrorResponse,
     SuccessResponse,
+    jwt_auth,
+    routers,
 )
+from .config import config, logger
+from .langchain_integration import LangchainPipeline, TextProcessor, VectorStore
 
 __all__ = [
     "config",
@@ -24,18 +18,12 @@ __all__ = [
     "VectorStore",
     "TextProcessor",
     # API components
-    "AuthHandler",
-    "get_current_user",
-    "require_auth",
-    "optional_auth",
-    "auth_router",
-    "chat_router",
-    "health_router",
+    "routers",
+    "jwt_auth",
     "ChatRequest",
     "ChatResponse",
     "LoginRequest",
     "LoginResponse",
-    "UserResponse",
     "ErrorResponse",
     "SuccessResponse",
 ]

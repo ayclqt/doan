@@ -5,34 +5,32 @@ API Schemas sử dụng msgspec Struct cho hệ thống chatbot hỗ trợ sản
 from .auth import (
     LoginRequest,
     LoginResponse,
-    UserCreate,
-    UserResponse,
-    TokenResponse,
-    RefreshTokenRequest,
-    ChangePasswordRequest,
+    RegisterRequest,
+    RegisterResponse,
+    TokenPayload,
+    User,
 )
 from .chat import (
+    ChatHistoryResponse,
     ChatRequest,
     ChatResponse,
-    ChatStreamResponse,
-    ChatHistoryResponse,
-    SearchInfoResponse,
     ChatStreamChunk,
-    ConversationHistory,
+    ChatStreamResponse,
     ConversationCreate,
+    ConversationHistory,
     ConversationResponse,
+    SearchInfoResponse,
 )
-from .common import ErrorResponse, SuccessResponse, PaginationParams, HealthResponse
+from .common import ErrorResponse, HealthResponse, PaginationParams, SuccessResponse
 
 __all__ = [
     # Auth schemas
     "LoginRequest",
     "LoginResponse",
-    "UserCreate",
-    "UserResponse",
-    "TokenResponse",
-    "RefreshTokenRequest",
-    "ChangePasswordRequest",
+    "RegisterRequest",
+    "RegisterResponse",
+    "User",
+    "TokenPayload",
     # Chat schemas
     "ChatRequest",
     "ChatResponse",

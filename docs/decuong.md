@@ -23,55 +23,69 @@ B. ĐỀ CƯƠNG ĐỒ ÁN
     * Phân tích và tích hợp mô hình ngôn ngữ lớn để xử lý ngôn ngữ tự nhiên và trả lời thông minh.
     * Đảm bảo bảo mật và quyền riêng tư
         * Bảo vệ thông tin người dùng và dữ liệu sản phẩm, không lưu trữ hội thoại trừ khi được yêu cầu rõ ràng.
-        * Áp dụng mã hóa dữ liệu bằng các phương pháp như AES-256 cho lưu trữ và RSA cho truyền tải.
-        * Ngăn chặn các lỗ hổng bảo mật như Injection Attack và Prompt Hacking thông qua kiểm tra đầu vào và sandboxing.
+        * Áp dụng mã hóa dữ liệu bằng các phương pháp như AES-256 cho lưu trữ và TLS/SSL cho truyền tải.
+        * Ngăn chặn các lỗ hổng bảo mật như Injection Attack và Prompt Hacking thông qua kiểm tra đầu vào và rate limiting.
     * Xây dựng các chức năng chính: trả lời câu hỏi, gợi ý sản phẩm, tích hợp với cơ sở dữ liệu sản phẩm.
     * Đánh giá hiệu suất chatbot dựa trên các tiêu chí cụ thể như tốc độ phản hồi, độ chính xác, khả năng xử lý lỗi và khả năng mở rộng.
 
     Cụ thể về công nghệ sử dụng:
     * Frontend (FE): Sử dụng Streamlit để xây dựng giao diện người dùng thân thiện, nhẹ nhàng và dễ triển khai. Streamlit cho phép tạo ứng dụng web tương tác nhanh chóng, hỗ trợ hiển thị thông tin sản phẩm và tương tác với người dùng theo thời gian thực.
     * Backend (BE):
-        * Gọi các mô hình ngôn ngữ lớn thông qua giao thức gRPC để đảm bảo hiệu suất cao và truyền dữ liệu nhanh chóng giữa frontend và backend.
-        * Kết hợp hàng đợi worker bằng Dramatiq với message broker là RabbitMQ để xử lý các tác vụ bất đồng bộ như truy vấn dữ liệu sản phẩm, phân tích câu hỏi người dùng, và trả lời tự động. Điều này giúp hệ thống hoạt động mượt mà ngay cả khi có nhiều yêu cầu cùng lúc.
-    * Tích hợp: Kết nối cơ sở dữ liệu sản phẩm (ví dụ: MySQL hoặc MongoDB) với chatbot để cung cấp thông tin theo thời gian thực.
+        * Sử dụng Litestar framework để xây dựng API REST cho hệ thống backend với hiệu suất cao và kiến trúc hiện đại.
+        * Tích hợp trực tiếp các mô hình ngôn ngữ lớn thông qua API để xử lý truy vấn và sinh phản hồi thông minh.
+        * Xử lý các tác vụ đồng bộ và bất đồng bộ như truy vấn dữ liệu sản phẩm, phân tích câu hỏi người dùng, và trả lời tự động.
+    * Tích hợp: Kết nối cơ sở dữ liệu sản phẩm (PostgreSQL hoặc SQLite) với chatbot để cung cấp thông tin theo thời gian thực.
+    * Kiến trúc hệ thống: Frontend Streamlit gọi API từ backend Litestar, backend xử lý logic nghiệp vụ và tương tác với LLM, cơ sở dữ liệu để trả về kết quả cho người dùng.
 
 3.  Dự kiến chương, mục
 
-    Sau các mục “Lời mở đầu”, “Danh mục từ viết tắt và ký hiệu”, “Danh mục hình vẽ”, “Danh mục bảng”, nội dung chính của đồ án dự kiến được kết cấu như sau:
-    1.  Chương I. Tổng quan về ứng dụng chatbot hỗ trợ giới thiệu sản phẩm
-        1.1. Thực trạng và sự cần thiết của chatbot trong thương mại điện tử.
-        1.2. Mục tiêu và phạm vi của đồ án.
-        1.3. Đối tượng sử dụng hệ thống.
-        1.4. Các công cụ và công nghệ liên quan
-    2.  Chương II. Tổng quan công nghệ
-        2.1. Tổng quan về mô hình ngôn ngữ lớn và ứng dụng trong chatbot.
-        2.2. Giới thiệu framework Streamlit để xây dựng giao diện.
-        2.3. Tổng quan về LangChain trong việc tích hợp LLM.
-        2.4. Sử dụng LiteLLM để gọi và quản lý các mô hình ngôn ngữ.
-        2.5. Giới thiệu gRPC, Dramatiq và RabbitMQ trong xử lý tác vụ backend.
-    3.  Chương III. Xây dựng và triển khai hệ thống
-        3.1. Cài đặt môi trường phát triển dự án.
-        3.2. Thiết kế và xây dựng các chức năng chính của chatbot.
-        3.3. Bảo mật và quyền riêng tư
-        3.4. Kiểm thử hệ thống.
-        3.5. Triển khai hệ thống.
-        3.6. Thu thập và xử lý dữ liệu sản phẩm
-    4.  Chương IV. Kết luận và hướng phát triển
-        4.1. Kết quả đạt được.
-        4.2. Khó khăn và thách thức.
-        4.3. Phương hướng phát triển trong tương lai.
-    5.  Chương V. Mở rộng và ứng dụng thực tế
-        5.1. Ứng dụng chatbot trong hỗ trợ khách hàng (Customer Support).
-        5.2. Tư vấn sản phẩm trên đa nền tảng (Facebook, Zalo, Website, App di động).
+    Sau các mục "Lời mở đầu", "Danh mục từ viết tắt và ký hiệu", "Danh mục hình vẽ", "Danh mục bảng", nội dung chính của đồ án dự kiến được kết cấu như sau:
 
-    Sau cùng là các mục “Kết luận”, “Danh mục tài liệu tham khảo” và “Phụ lục”. Phần phụ lục sẽ chứa mã nguồn của các module chính của ứng dụng.
+    **Chương I. Tổng quan về ứng dụng chatbot hỗ trợ giới thiệu sản phẩm**
+    1.1. Thực trạng và sự cần thiết của chatbot trong thương mại điện tử
+    1.2. Mục tiêu và phạm vi của đồ án
+    1.3. Đối tượng sử dụng hệ thống
+    1.4. Các công cụ và công nghệ liên quan
+
+    **Chương II. Tổng quan công nghệ**
+    2.1. Tổng quan về mô hình ngôn ngữ lớn và ứng dụng trong chatbot
+    2.2. Giới thiệu framework Streamlit để xây dựng giao diện
+    2.3. Tổng quan về LangChain trong việc tích hợp LLM
+    2.4. Giới thiệu Litestar framework cho backend API
+
+    **Chương III. Phân tích và thiết kế hệ thống**
+    3.1. Phân tích yêu cầu hệ thống
+    3.2. Thiết kế kiến trúc tổng thể
+    3.3. Thiết kế API và giao diện người dùng
+    3.4. Thiết kế bảo mật hệ thống
+
+    **Chương IV. Xây dựng và triển khai hệ thống**
+    4.1. Cài đặt môi trường phát triển dự án
+    4.2. Xây dựng backend API với Litestar
+    4.3. Tích hợp mô hình ngôn ngữ lớn
+    4.4. Thu thập và xử lý dữ liệu sản phẩm
+    4.5. Xây dựng giao diện với Streamlit
+
+    **Chương V. Kiểm thử và đánh giá hệ thống**
+    5.1. Kiểm thử chức năng hệ thống
+    5.2. Kiểm thử hiệu suất và bảo mật
+    5.3. Đánh giá kết quả và so sánh
+
+    **Chương VI. Kết luận và hướng phát triển**
+    6.1. Kết quả đạt được
+    6.2. Khó khăn và thách thức
+    6.3. Phương hướng phát triển trong tương lai
+
+    Sau cùng là các mục "Kết luận", "Danh mục tài liệu tham khảo" và "Phụ lục". Phần phụ lục sẽ chứa mã nguồn của các module chính của ứng dụng.
+
+    **Tổng số trang dự kiến: 78-100 trang** (trong đó 70-90 trang nội dung chính, còn lại là phần mở đầu, kết luận và phụ lục)
 
 4.  Tài liệu tham khảo để xây dựng đề cương
     1.  [1] Valentina Alto, Building LLM Powered Applications: Create intelligent apps and agents with large language models.
     2.  [2] Trang chủ chính thức của Streamlit https://streamlit.io/
     3.  [3] Trang chủ chính thức của LangChain https://www.langchain.com/
-    4.  [4] Trang chủ chính thức của LiteLLM https://litellm.ai/
-    5.  [5] Tài liệu gRPC https://grpc.io/
-    6.  [6] Tài liệu Dramatiq https://dramatiq.io/
-    7.  [7] Tài liệu RabbitMQ https://www.rabbitmq.com/
-    8.  [8] OWASP, "Top 10 Web Application Security Risks https://owasp.org/www-project-top-ten/
+    4.  [4] Tài liệu Litestar framework https://litestar.dev/
+    5.  [6] OpenAI API Documentation https://platform.openai.com/docs
+    6.  [7] OWASP, "Top 10 Web Application Security Risks" https://owasp.org/www-project-top-ten/
+    7.  [8] RESTful API Design Best Practices https://restfulapi.net/
+    8.  [9] Hugging Face Transformers Documentation https://huggingface.co/docs/transformers/

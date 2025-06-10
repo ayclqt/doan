@@ -1,0 +1,37 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+       - "6333:6333"
+       - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: always
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
+  core:
+    build: .
+    restart: always
+    ports:
+      - "8456:8000"
+    environment:
+      OPENAI_API_KEY: your_openai_api_key_here
+      OPENAI_BASE_URL: "https://api.a4f.co/v1"
+      QDRANT_URL: qdrant
+      QDRANT_PORT: 6333
+      QDRANT_COLLECTION_NAME: product_data
+      EMBEDDING_MODEL_NAME: AITeamVN/Vietnamese_Embedding
+      LLM_MODEL_NAME: provider-2/gpt-4.1
+      LLM_TEMPERATURE: 1
+      LLM_MAX_TOKENS: 65536
+      CHUNK_SIZE: 1000
+      CHUNK_OVERLAP: 200
+      CLEANED_DATA_PATH: cleaned_data.json
+      REDIS_URL: redis://redis:6379
+volumes:
+  qdrant_data:

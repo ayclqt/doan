@@ -1,7 +1,6 @@
 import json
 import re
 
-
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
 __credits__ = ["Lâm Quang Trí"]
@@ -144,22 +143,21 @@ def clean_data(data):
         # Thêm loại sản phẩm nếu xác định được
         if product_type:
             cleaned_product["Loại sản phẩm"] = product_type
-        else:  # Cố gắng suy luận lại loại sản phẩm nếu chưa có
-            if (
-                "Chip xử lý (CPU)" in cleaned_product
-                or "RAM" in cleaned_product
-                and any(
-                    k in cleaned_product
-                    for k in ["Dung lượng lưu trữ", "Độ phân giải camera sau"]
-                )
-            ):
-                cleaned_product["Loại sản phẩm"] = "Điện thoại"
-            elif "Màn hình" in cleaned_product and "Ổ cứng" in cleaned_product:
-                cleaned_product["Loại sản phẩm"] = "Laptop"
-            else:
-                # Nếu vẫn không xác định được loại, có thể cân nhắc loại bỏ hoặc gán loại "Không xác định"
-                # Tạm thời để trống hoặc bạn có thể quyết định bỏ nếu không có loại
-                pass
+        elif (
+            "Chip xử lý (CPU)" in cleaned_product
+            or ("RAM" in cleaned_product
+            and any(
+                k in cleaned_product
+                for k in ["Dung lượng lưu trữ", "Độ phân giải camera sau"]
+            ))
+        ):
+            cleaned_product["Loại sản phẩm"] = "Điện thoại"
+        elif "Màn hình" in cleaned_product and "Ổ cứng" in cleaned_product:
+            cleaned_product["Loại sản phẩm"] = "Laptop"
+        else:
+            # Nếu vẫn không xác định được loại, có thể cân nhắc loại bỏ hoặc gán loại "Không xác định"
+            # Tạm thời để trống hoặc bạn có thể quyết định bỏ nếu không có loại
+            pass
 
         cleaned_products.append(cleaned_product)
 

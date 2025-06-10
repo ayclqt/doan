@@ -1,23 +1,34 @@
-import taskiq_litestar
 from litestar import Litestar
 from litestar.config.compression import CompressionConfig
 from litestar.logging import StructLoggingConfig
 from litestar.openapi import OpenAPIConfig
 from litestar.openapi.plugins import ScalarRenderPlugin
-from litestar.plugins.structlog import StructlogPlugin, StructlogConfig
+from litestar.plugins.structlog import StructlogConfig, StructlogPlugin
 from litestar_granian import GranianPlugin
-from taskiq_aio_pika import AioPikaBroker
-from structlog import make_filtering_bound_logger, PrintLoggerFactory
+from structlog import PrintLoggerFactory, make_filtering_bound_logger
 from structlog.dev import ConsoleRenderer, set_exc_info
 from structlog.processors import StackInfoRenderer, TimeStamper, add_log_level
 from structlog.stdlib import PositionalArgumentsFormatter
 from taskiq_redis import RedisAsyncResultBackend
 
-from src import config, auth_router, chat_router, health_router
+from src import config, jwt_auth, routers
+from src.api.auth import redis_user_service
+
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
+__status__ = "Development"
 
 result_backend = RedisAsyncResultBackend(config.redis_url)
-broker = AioPikaBroker(config.rabbitmq_url).with_result_backend(result_backend)
-taskiq_litestar.init(broker, "app:app")
+
+
+async def cleanup_redis(_app):
+    """Cleanup Redis connections on app shutdown"""
+    await redis_user_service.close()
+
 
 logging_config = StructLoggingConfig(
     processors=[
@@ -30,18 +41,17 @@ logging_config = StructLoggingConfig(
         ConsoleRenderer(),
     ],
     wrapper_class=make_filtering_bound_logger(
-        10 if config.deploy_env in ["dev", "development", "develop", "local"] else 20
+        10 if config.deploy_env in {"dev", "development", "develop", "local"} else 20
     ),
     logger_factory=PrintLoggerFactory(),
     cache_logger_on_first_use=True,
 )
 app = Litestar(
-    route_handlers=[
-        auth_router,
-        chat_router,
-        health_router,
-    ],
-    plugins=[StructlogPlugin(StructlogConfig(logging_config))],
+    [routers],
+    path=config.prefix,
+    on_app_init=[jwt_auth.on_app_init],
+    on_shutdown=[cleanup_redis],
+    plugins=[StructlogPlugin(StructlogConfig(logging_config)), GranianPlugin()],
     # middleware=[
     #     LoggingMiddleware,
     # ],
@@ -53,5 +63,4 @@ app = Litestar(
         description="API cho hệ thống chatbot hỗ trợ tư vấn sản phẩm điện tử sử dụng LangChain và Qdrant",
         render_plugins=[ScalarRenderPlugin()],
     ),
-    # debug=config.deploy_env in ["dev", "development", "develop", "local"],
 )
