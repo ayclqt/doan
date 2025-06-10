@@ -9,6 +9,14 @@ from ...config import logger
 from ..auth import AuthService
 from ..schemas import LoginRequest, LoginResponse, RegisterRequest, RegisterResponse
 
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
+__status__ = "Development"
+
 
 class Auth(Controller):
     """Authentication router for login functionality"""

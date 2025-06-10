@@ -11,8 +11,8 @@ from structlog.processors import StackInfoRenderer, TimeStamper, add_log_level
 from structlog.stdlib import PositionalArgumentsFormatter
 from taskiq_redis import RedisAsyncResultBackend
 
-from src import config, jwt_auth, routers
-from src.api.auth import redis_user_service
+from src import config, jwt_auth, routers, redis_user_service
+from init_admin_user import main
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -50,6 +50,7 @@ app = Litestar(
     [routers],
     path=config.prefix,
     on_app_init=[jwt_auth.on_app_init],
+    on_startup=[main],
     on_shutdown=[cleanup_redis],
     plugins=[StructlogPlugin(StructlogConfig(logging_config)), GranianPlugin()],
     # middleware=[

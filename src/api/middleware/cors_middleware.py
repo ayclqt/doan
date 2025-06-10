@@ -7,6 +7,15 @@ from litestar.config.cors import CORSConfig
 from ...config import config
 
 
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
+__status__ = "Development"
+
+
 class CORSMiddleware:
     """CORS middleware configuration cho API."""
 
@@ -62,12 +71,3 @@ class CORSMiddleware:
             ],
             max_age=3600,  # 1 hour
         )
-
-
-__author__ = "Lâm Quang Trí"
-__copyright__ = "Copyright 2025, Lâm Quang Trí"
-__credits__ = ["Lâm Quang Trí"]
-
-__maintainer__ = "Lâm Quang Trí"
-__email__ = "quangtri.lam.9@gmail.com"
-__status__ = "Development"

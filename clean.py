@@ -143,13 +143,12 @@ def clean_data(data):
         # Thêm loại sản phẩm nếu xác định được
         if product_type:
             cleaned_product["Loại sản phẩm"] = product_type
-        elif (
-            "Chip xử lý (CPU)" in cleaned_product
-            or ("RAM" in cleaned_product
+        elif "Chip xử lý (CPU)" in cleaned_product or (
+            "RAM" in cleaned_product
             and any(
                 k in cleaned_product
                 for k in ["Dung lượng lưu trữ", "Độ phân giải camera sau"]
-            ))
+            )
         ):
             cleaned_product["Loại sản phẩm"] = "Điện thoại"
         elif "Màn hình" in cleaned_product and "Ổ cứng" in cleaned_product:

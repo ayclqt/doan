@@ -6,6 +6,7 @@ from .api import (
     LoginResponse,
     SuccessResponse,
     jwt_auth,
+    redis_user_service,
     routers,
 )
 from .config import config, logger
@@ -20,6 +21,7 @@ __all__ = [
     # API components
     "routers",
     "jwt_auth",
+    "redis_user_service",
     "ChatRequest",
     "ChatResponse",
     "LoginRequest",

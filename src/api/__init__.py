@@ -2,7 +2,7 @@
 API module for the chatbot application.
 """
 
-from .auth import jwt_auth
+from .auth import jwt_auth, redis_user_service
 from .routes import routers
 from .schemas import (
     ChatRequest,
@@ -18,6 +18,7 @@ from .schemas import (
 __all__ = [
     # Auth
     "jwt_auth",
+    "redis_user_service",
     # Routes
     "routers",
     # Schemas

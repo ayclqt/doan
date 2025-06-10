@@ -15,6 +15,15 @@ from litestar.types import ASGIApp, Receive, Scope, Send
 from ...config import logger
 
 
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
+__status__ = "Development"
+
+
 class RateLimitMiddleware(AbstractMiddleware):
     """Rate limiting middleware với sliding window algorithm."""
 
@@ -289,12 +298,3 @@ class APIKeyRateLimitMiddleware(RateLimitMiddleware):
         else:
             # Use default limits for IP-based requests
             super()._check_rate_limits(client_key, current_time)
-
-
-__author__ = "Lâm Quang Trí"
-__copyright__ = "Copyright 2025, Lâm Quang Trí"
-__credits__ = ["Lâm Quang Trí"]
-
-__maintainer__ = "Lâm Quang Trí"
-__email__ = "quangtri.lam.9@gmail.com"
-__status__ = "Development"
