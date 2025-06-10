@@ -16,7 +16,7 @@ from ..config import config, logger
 from .vectorstore import VectorStore
 from .web_search import HybridSearcher, WebSearcher
 from .llm_search_system import LLMSearchSystem
-from .agent_system import ProductAssistantAgent, get_agent
+from .agent_system import ProductAssistantAgent
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -70,35 +70,33 @@ class LangchainPipeline:
             and self.web_searcher.is_available()
             else None
         )
-        
+
         # Initialize LLM search system
-        self.use_llm_search_system = use_llm_search_system and self.enable_web_search and not use_agent_system
+        self.use_llm_search_system = (
+            use_llm_search_system and self.enable_web_search and not use_agent_system
+        )
         self.llm_search_system = (
             LLMSearchSystem(
-                model_name=model_name, 
+                model_name=model_name,
                 web_searcher=self.web_searcher,
                 cache_enabled=True,
-                fallback_enabled=True
+                fallback_enabled=True,
             )
             if self.use_llm_search_system
             else None
         )
-        
+
         # Initialize Agent system (replaces LLM search system when enabled)
         self.use_agent_system = use_agent_system and self.enable_web_search
         self.agent_system = (
-            ProductAssistantAgent(
-                model_name=model_name,
-                temperature=0.3,
-                verbose=False
-            )
+            ProductAssistantAgent(model_name=model_name, temperature=0.3, verbose=False)
             if self.use_agent_system
             else None
         )
 
         # Set up the pipeline
         self.pipeline = self._create_pipeline()
-        
+
         # Initialize logger
         self.logger = logger
 
@@ -134,14 +132,16 @@ class LangchainPipeline:
         # Define hybrid context retrieval function
         def get_hybrid_context(input_data: dict) -> str:
             # Extract original question and enhanced question
-            original_question = input_data.get("original_question", input_data.get("question", ""))
+            original_question = input_data.get(
+                "original_question", input_data.get("question", "")
+            )
             enhanced_question = input_data.get("question", "")
             # Use enhanced question for vector search (with history context)
             vector_docs = retriever.invoke(enhanced_question)
             vector_context = self._format_vector_context(vector_docs)
 
             # Get conversation history for context
-            conversation_history = getattr(self, '_current_conversation_history', None)
+            conversation_history = getattr(self, "_current_conversation_history", None)
 
             # Use Agent system if available (highest priority)
             if self.use_agent_system and self.agent_system:
@@ -149,62 +149,90 @@ class LangchainPipeline:
                     agent_result = self.agent_system.process_query(
                         original_question, conversation_history
                     )
-                    
+
                     if agent_result["success"]:
                         # Log agent tool usage
-                        tools_used = [tool["tool"] for tool in agent_result["tools_used"]]
-                        self.logger.info(f"Agent used tools: {tools_used} (time: {agent_result['processing_time']:.2f}s)")
-                        
+                        tools_used = [
+                            tool["tool"] for tool in agent_result["tools_used"]
+                        ]
+                        self.logger.info(
+                            f"Agent used tools: {tools_used} (time: {agent_result['processing_time']:.2f}s)"
+                        )
+
                         # Return agent response
                         return agent_result["response"]
                     else:
-                        self.logger.warning(f"Agent failed: {agent_result.get('error', 'Unknown error')}")
+                        self.logger.warning(
+                            f"Agent failed: {agent_result.get('error', 'Unknown error')}"
+                        )
                         # Fall through to LLM search system or rules
-                        
+
                 except Exception as e:
                     self.logger.warning(f"Agent system failed, falling back: {e}")
                     # Fall through to LLM search system or rules
-            
+
             # Use LLM search system if available (fallback from agent)
             elif self.use_llm_search_system and self.llm_search_system:
                 try:
-                    web_results, search_decision = self.llm_search_system.execute_complete_search(
-                        original_question, vector_docs, conversation_history
+                    web_results, search_decision = (
+                        self.llm_search_system.execute_complete_search(
+                            original_question, vector_docs, conversation_history
+                        )
                     )
-                    
+
                     # Log LLM decision details
-                    self.logger.info(f"LLM search decision: {search_decision.reasoning} (confidence: {search_decision.confidence:.2f})")
-                    
+                    self.logger.info(
+                        f"LLM search decision: {search_decision.reasoning} (confidence: {search_decision.confidence:.2f})"
+                    )
+
                     if web_results and search_decision.should_search:
                         # Use LLM system's results
-                        formatted_web_results = self.web_searcher.format_search_results(web_results)
+                        formatted_web_results = self.web_searcher.format_search_results(
+                            web_results
+                        )
                         if vector_context and vector_context.strip():
                             return f"{vector_context}\n\n{formatted_web_results}"
                         return formatted_web_results
-                    
+
                     # LLM decided not to search, use vector results only
                     return vector_context
-                    
+
                 except Exception as e:
-                    self.logger.warning(f"LLM search system failed, falling back to rule-based: {e}")
+                    self.logger.warning(
+                        f"LLM search system failed, falling back to rule-based: {e}"
+                    )
                     # Fall through to rule-based logic
-            
+
             # Fallback to simplified rule-based logic (only when LLM system fails)
             should_search = (
-                not vector_docs or
-                len(vector_docs) < 2 or
-                any(keyword in original_question.lower() for keyword in ["giá", "so sánh", "mới", "2024", "2025", "khuyến mãi"])
+                not vector_docs
+                or len(vector_docs) < 2
+                or any(
+                    keyword in original_question.lower()
+                    for keyword in [
+                        "giá",
+                        "so sánh",
+                        "mới",
+                        "2024",
+                        "2025",
+                        "khuyến mãi",
+                    ]
+                )
             )
 
             if should_search and self.web_searcher:
                 # Extract clean search query that resolves references from history
-                search_query = self._extract_search_query(original_question, conversation_history)
+                search_query = self._extract_search_query(
+                    original_question, conversation_history
+                )
                 # Perform web search using clean search query
                 web_results = self.web_searcher.search_product_info(search_query)
 
                 # Combine results
                 if vector_context and vector_context.strip():
-                    formatted_web_results = self.web_searcher.format_search_results(web_results)
+                    formatted_web_results = self.web_searcher.format_search_results(
+                        web_results
+                    )
                     return f"{vector_context}\n\n{formatted_web_results}"
                 return self.web_searcher.format_search_results(web_results)
 
@@ -215,7 +243,9 @@ class LangchainPipeline:
             RunnableParallel(
                 {
                     "context": RunnableLambda(get_hybrid_context),
-                    "question": RunnableLambda(lambda x: x.get("question", x) if isinstance(x, dict) else x),
+                    "question": RunnableLambda(
+                        lambda x: x.get("question", x) if isinstance(x, dict) else x
+                    ),
                 }
             )
             | rag_prompt
@@ -234,17 +264,21 @@ class LangchainPipeline:
             [f"Sản phẩm {i + 1}:\n" + doc.page_content for i, doc in enumerate(docs)]
         )
 
-    def answer_question(self, question: str, conversation_history: Optional[List[dict]] = None) -> str:
+    def answer_question(
+        self, question: str, conversation_history: Optional[List[dict]] = None
+    ) -> str:
         """Process a user question and return an answer."""
         try:
             # Store conversation history for web search access
             self._current_conversation_history = conversation_history
             # Include conversation history in the question context
-            enhanced_question = self._enhance_question_with_history(question, conversation_history)
+            enhanced_question = self._enhance_question_with_history(
+                question, conversation_history
+            )
             # Create input with both original and enhanced questions
             pipeline_input = {
                 "question": enhanced_question,
-                "original_question": question
+                "original_question": question,
             }
             response = self.pipeline.invoke(pipeline_input)
             return response
@@ -255,17 +289,21 @@ class LangchainPipeline:
             # Clean up temporary storage
             self._current_conversation_history = None
 
-    def answer_question_stream(self, question: str, conversation_history: Optional[List[dict]] = None) -> Iterator[str]:
+    def answer_question_stream(
+        self, question: str, conversation_history: Optional[List[dict]] = None
+    ) -> Iterator[str]:
         """Process a user question and stream the answer."""
         try:
             # Store conversation history for web search access
             self._current_conversation_history = conversation_history
             # Include conversation history in the question context
-            enhanced_question = self._enhance_question_with_history(question, conversation_history)
+            enhanced_question = self._enhance_question_with_history(
+                question, conversation_history
+            )
             # Create input with both original and enhanced questions
             pipeline_input = {
                 "question": enhanced_question,
-                "original_question": question
+                "original_question": question,
             }
             for chunk in self.pipeline.stream(pipeline_input):
                 yield chunk
@@ -276,16 +314,22 @@ class LangchainPipeline:
             # Clean up temporary storage
             self._current_conversation_history = None
 
-    def _enhance_question_with_history(self, question: str, conversation_history: Optional[List[dict]] = None) -> str:
+    def _enhance_question_with_history(
+        self, question: str, conversation_history: Optional[List[dict]] = None
+    ) -> str:
         """Enhance the question with conversation history context."""
         if not conversation_history or len(conversation_history) == 0:
             return question
         # Build context from recent conversation history (last 3 messages)
-        recent_history = conversation_history[-3:] if len(conversation_history) > 3 else conversation_history
+        recent_history = (
+            conversation_history[-3:]
+            if len(conversation_history) > 3
+            else conversation_history
+        )
         context_parts = []
         for msg in recent_history:
-            user_msg = msg.get('message', '')
-            bot_response = msg.get('response', '')
+            user_msg = msg.get("message", "")
+            bot_response = msg.get("response", "")
             if user_msg and bot_response:
                 context_parts.append(f"Người dùng: {user_msg}")
                 context_parts.append(f"Trợ lý: {bot_response}")
@@ -300,31 +344,66 @@ Lưu ý: Khi người dùng nói "điện thoại trên", "sản phẩm trên", 
             return enhanced_question
         return question
 
-    def _extract_search_query(self, question: str, conversation_history: Optional[List[dict]] = None) -> str:
+    def _extract_search_query(
+        self, question: str, conversation_history: Optional[List[dict]] = None
+    ) -> str:
         """Extract clean search query from question, resolving references from history."""
         if not conversation_history:
             return question
         # Check if question contains references
         reference_phrases = [
-            "điện thoại trên", "sản phẩm trên", "thiết bị trên", "máy trên",
-            "điện thoại đó", "sản phẩm đó", "thiết bị đó", "máy đó",
-            "điện thoại này", "sản phẩm này", "thiết bị này", "máy này"
+            "điện thoại trên",
+            "sản phẩm trên",
+            "thiết bị trên",
+            "máy trên",
+            "điện thoại đó",
+            "sản phẩm đó",
+            "thiết bị đó",
+            "máy đó",
+            "điện thoại này",
+            "sản phẩm này",
+            "thiết bị này",
+            "máy này",
         ]
 
         has_reference = any(phrase in question.lower() for phrase in reference_phrases)
         if not has_reference:
             return question
         # Find the most recent product mentioned in history
-        recent_history = conversation_history[-3:] if len(conversation_history) > 3 else conversation_history
+        recent_history = (
+            conversation_history[-3:]
+            if len(conversation_history) > 3
+            else conversation_history
+        )
         for msg in reversed(recent_history):
-            user_msg = msg.get('message', '').lower()
-            bot_response = msg.get('response', '').lower()
+            user_msg = msg.get("message", "").lower()
+            bot_response = msg.get("response", "").lower()
             # Look for product names in user messages and bot responses
             product_names = [
-                'iphone', 'samsung', 'xiaomi', 'oppo', 'vivo', 'realme',
-                'oneplus', 'huawei', 'nokia', 'sony', 'lg', 'motorola',
-                'asus', 'acer', 'dell', 'hp', 'lenovo', 'macbook',
-                'ipad', 'galaxy', 'redmi', 'mi ', 'poco', 'iqoo'
+                "iphone",
+                "samsung",
+                "xiaomi",
+                "oppo",
+                "vivo",
+                "realme",
+                "oneplus",
+                "huawei",
+                "nokia",
+                "sony",
+                "lg",
+                "motorola",
+                "asus",
+                "acer",
+                "dell",
+                "hp",
+                "lenovo",
+                "macbook",
+                "ipad",
+                "galaxy",
+                "redmi",
+                "mi ",
+                "poco",
+                "iqoo",
             ]
             for name in product_names:
                 if name in user_msg or name in bot_response:
@@ -363,47 +442,61 @@ Lưu ý: Khi người dùng nói "điện thoại trên", "sản phẩm trên", 
 
             # Get Agent system info if available
             if self.use_agent_system and self.agent_system:
-                conversation_history = getattr(self, '_current_conversation_history', None)
-                agent_result = self.agent_system.process_query(question, conversation_history)
-                
-                info.update({
-                    "agent_decision": {
-                        "success": agent_result["success"],
-                        "tools_used": [tool["tool"] for tool in agent_result["tools_used"]],
-                        "processing_time": agent_result["processing_time"],
-                        "agent_reasoning": agent_result.get("agent_reasoning", [])
-                    },
-                    "agent_stats": self.agent_system.get_stats(),
-                })
-            
+                conversation_history = getattr(
+                    self, "_current_conversation_history", None
+                )
+                agent_result = self.agent_system.process_query(
+                    question, conversation_history
+                )
+
+                info.update(
+                    {
+                        "agent_decision": {
+                            "success": agent_result["success"],
+                            "tools_used": [
+                                tool["tool"] for tool in agent_result["tools_used"]
+                            ],
+                            "processing_time": agent_result["processing_time"],
+                            "agent_reasoning": agent_result.get("agent_reasoning", []),
+                        },
+                        "agent_stats": self.agent_system.get_stats(),
+                    }
+                )
+
             # Get LLM search system decision if available (fallback)
             elif self.use_llm_search_system and self.llm_search_system:
-                conversation_history = getattr(self, '_current_conversation_history', None)
+                conversation_history = getattr(
+                    self, "_current_conversation_history", None
+                )
                 search_decision = self.llm_search_system.decide_search_strategy(
                     question, vector_docs, conversation_history
                 )
-                
-                info.update({
-                    "llm_decision": {
-                        "should_search": search_decision.should_search,
-                        "reasoning": search_decision.reasoning,
-                        "confidence": search_decision.confidence,
-                        "search_type": search_decision.search_type,
-                        "urgency": search_decision.urgency,
-                    },
-                    "system_stats": self.llm_search_system.get_system_stats(),
-                })
-                
+
+                info.update(
+                    {
+                        "llm_decision": {
+                            "should_search": search_decision.should_search,
+                            "reasoning": search_decision.reasoning,
+                            "confidence": search_decision.confidence,
+                            "search_type": search_decision.search_type,
+                            "urgency": search_decision.urgency,
+                        },
+                        "system_stats": self.llm_search_system.get_system_stats(),
+                    }
+                )
+
                 if search_decision.should_search:
                     query_result = self.llm_search_system.generate_search_queries(
-                        question, search_decision.expected_info_types, conversation_history
+                        question,
+                        search_decision.expected_info_types,
+                        conversation_history,
                     )
                     info["generated_queries"] = {
                         "primary": query_result.primary_query,
                         "alternatives": query_result.alternative_queries,
                         "reasoning": query_result.query_reasoning,
                     }
-            
+
             # Fallback info for rule-based logic
             elif self.hybrid_searcher:
                 should_use_web = self.hybrid_searcher.should_use_web_search(
@@ -437,21 +530,20 @@ Lưu ý: Khi người dùng nói "điện thoại trên", "sản phẩm trên", 
         if self.web_searcher and self.web_searcher.is_available():
             self.enable_web_search = True
             self.hybrid_searcher = HybridSearcher(self.web_searcher)
-            
+
             # Initialize or recreate LLM search system
             if self.use_llm_search_system:
                 self.llm_search_system = LLMSearchSystem(
                     web_searcher=self.web_searcher,
                     cache_enabled=True,
-                    fallback_enabled=True
+                    fallback_enabled=True,
                 )
-            
+
             # Initialize or recreate Agent system
             if self.use_agent_system:
                 self.agent_system = ProductAssistantAgent(
-                    temperature=0.3,
-                    verbose=False
+                    temperature=0.3, verbose=False
                 )
-            
+
             # Recreate pipeline with new settings
             self.pipeline = self._create_pipeline()
