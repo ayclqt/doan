@@ -124,7 +124,7 @@ async def retrieve_user_handler(token: Token, connection: ASGIConnection) -> Use
 jwt_auth = JWTAuth[User](
     retrieve_user_handler=retrieve_user_handler,
     token_secret=config.jwt_secret,
-    exclude=["/auth/login", "/schema"],  # Public endpoints
+    exclude=["/auth/login", "/schema", "/health"],  # Public endpoints
     default_token_expiration=timedelta(hours=24),
 )
 

@@ -435,7 +435,7 @@ class Chat(Controller):
                 detail="Internal server error while listing conversations",
             )
 
-    @get("/chat/conversations/{conversation_id:str}", status_code=HTTP_200_OK)
+    @get("/conversations/{conversation_id:str}", status_code=HTTP_200_OK)
     async def get_conversation_history(
         self, conversation_id: str, user: User | None = None
     ) -> ChatHistoryResponse:
@@ -489,7 +489,7 @@ class Chat(Controller):
                 detail="Internal server error while getting conversation history",
             )
 
-    @delete("/chat/conversations/{conversation_id:str}", status_code=HTTP_200_OK)
+    @delete("/conversations/{conversation_id:str}", status_code=HTTP_200_OK)
     async def delete_conversation(
         self, conversation_id: str, user: User = None
     ) -> SuccessResponse:
@@ -528,7 +528,7 @@ class Chat(Controller):
                 detail="Internal server error while deleting conversation",
             )
 
-    @get("/chat/search-info", status_code=HTTP_200_OK)
+    @get("/search-info", status_code=HTTP_200_OK)
     async def get_search_info(self, query: str) -> SearchInfoResponse:
         """Lấy thông tin search debug."""
         try:
@@ -560,7 +560,7 @@ class Chat(Controller):
                 detail="Internal server error while getting search info",
             )
 
-    @get("/chat/agent-stats", status_code=HTTP_200_OK)
+    @get("/agent-stats", status_code=HTTP_200_OK)
     async def get_agent_system_stats(self) -> dict:
         """Lấy thống kê Agent system."""
         try:
@@ -597,7 +597,7 @@ class Chat(Controller):
                 detail="Internal server error while getting agent stats",
             )
 
-    @post("/chat/agent-reset", status_code=HTTP_200_OK)
+    @post("/agent-reset", status_code=HTTP_200_OK)
     async def reset_agent_stats(self) -> dict:
         """Reset Agent system statistics."""
         try:
@@ -640,7 +640,7 @@ class Chat(Controller):
                 detail="Internal server error while resetting agent system",
             )
 
-    @get("/chat/agent-tools", status_code=HTTP_200_OK)
+    @get("/agent-tools", status_code=HTTP_200_OK)
     async def get_available_tools(self) -> dict:
         """Lấy danh sách tools khả dụng của Agent."""
         try:
@@ -679,7 +679,7 @@ class Chat(Controller):
                 detail="Internal server error while getting tools",
             )
 
-    @get("/chat/suggestions", status_code=HTTP_200_OK)
+    @get("/suggestions", status_code=HTTP_200_OK)
     async def get_chat_suggestions(self) -> dict:
         """Lấy gợi ý câu hỏi."""
         suggestions = [
