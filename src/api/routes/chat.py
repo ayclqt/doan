@@ -60,13 +60,16 @@ def struct_to_dict(struct_obj) -> Dict:
 
 
 def get_qa_pipeline() -> LangchainPipeline:
-    """Get or create QA pipeline instance."""
+    """Get or create QA pipeline instance with Agent system."""
     global _qa_pipeline
     if _qa_pipeline is None:
         try:
             vector_store = VectorStore()
-            _qa_pipeline = LangchainPipeline(vector_store=vector_store)
-            logger.info("QA Pipeline initialized successfully")
+            _qa_pipeline = LangchainPipeline(
+                vector_store=vector_store,
+                use_agent_system=True
+            )
+            logger.info("QA Pipeline with Agent System initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize QA Pipeline: {e}")
             raise HTTPException(
@@ -110,6 +113,11 @@ async def stream_chat_response(
 ) -> AsyncIterator[str]:
     """Stream chat response với Server-Sent Events format."""
     try:
+        # Get conversation history for context
+        conversation_history = []
+        if conversation_id in _conversations:
+            conversation_history = _conversations[conversation_id]["messages"]
+        
         # Send start event
         start_chunk = ChatStreamChunk(
             type="start",
@@ -124,7 +132,7 @@ async def stream_chat_response(
 
         # Stream response chunks
         full_response = ""
-        for chunk in qa_pipeline.answer_question_stream(message):
+        for chunk in qa_pipeline.answer_question_stream(message, conversation_history):
             full_response += chunk
 
             chunk_data = ChatStreamChunk(
@@ -132,11 +140,32 @@ async def stream_chat_response(
             )
             yield f"data: {json.dumps(struct_to_dict(chunk_data))}\n\n"
 
-        # Get search info if requested
+        # Get search info if requested (enhanced with LLM decision details)
         search_info = None
         if include_search_info:
             try:
                 search_info = qa_pipeline.get_search_info(message)
+                
+                # Add Agent system statistics if available
+                if hasattr(qa_pipeline, 'agent_system') and qa_pipeline.agent_system:
+                    agent_stats = qa_pipeline.agent_system.get_stats()
+                    search_info["agent_stats"] = {
+                        "total_queries": agent_stats['performance']['total_queries'],
+                        "tool_calls": agent_stats['performance']['tool_calls'],
+                        "avg_tools_per_query": agent_stats['performance']['average_tools_per_query'],
+                        "agent_enabled": True
+                    }
+                elif hasattr(qa_pipeline, 'llm_search_system') and qa_pipeline.llm_search_system:
+                    system_stats = qa_pipeline.llm_search_system.get_system_stats()
+                    search_info["llm_system_stats"] = {
+                        "total_decisions": system_stats['performance']['total_decisions'],
+                        "cache_hit_rate": system_stats['cache']['hit_rate'] if 'cache' in system_stats else 0,
+                        "avg_decision_time": system_stats['performance']['avg_decision_time'],
+                        "llm_enabled": True
+                    }
+                else:
+                    search_info["system_stats"] = {"ai_system_enabled": False}
+                    
             except Exception as e:
                 logger.warning(f"Could not get search info: {e}")
 
@@ -223,17 +252,43 @@ class Chat(Controller):
                     },
                 )
 
+            # Get conversation history for context
+            conversation_history = []
+            if conversation_id in _conversations:
+                conversation_history = _conversations[conversation_id]["messages"]
+            
             # Non-streaming response
             start_time = datetime.now(timezone.utc)
-            response = qa_pipeline.answer_question(data.message)
+            response = qa_pipeline.answer_question(data.message, conversation_history)
             end_time = datetime.now(timezone.utc)
             response_time = (end_time - start_time).total_seconds()
 
-            # Get search info if requested
+            # Get search info if requested (enhanced with LLM decision details)
             search_info = None
             if data.include_search_info:
                 try:
                     search_info = qa_pipeline.get_search_info(data.message)
+                    
+                    # Add Agent system statistics if available
+                    if hasattr(qa_pipeline, 'agent_system') and qa_pipeline.agent_system:
+                        agent_stats = qa_pipeline.agent_system.get_stats()
+                        search_info["agent_stats"] = {
+                            "total_queries": agent_stats['performance']['total_queries'],
+                            "tool_calls": agent_stats['performance']['tool_calls'],
+                            "avg_tools_per_query": agent_stats['performance']['average_tools_per_query'],
+                            "agent_enabled": True
+                        }
+                    elif hasattr(qa_pipeline, 'llm_search_system') and qa_pipeline.llm_search_system:
+                        system_stats = qa_pipeline.llm_search_system.get_system_stats()
+                        search_info["llm_system_stats"] = {
+                            "total_decisions": system_stats['performance']['total_decisions'],
+                            "cache_hit_rate": system_stats['cache']['hit_rate'] if 'cache' in system_stats else 0,
+                            "avg_decision_time": system_stats['performance']['avg_decision_time'],
+                            "llm_enabled": True
+                        }
+                    else:
+                        search_info["system_stats"] = {"ai_system_enabled": False}
+                        
                 except Exception as e:
                     logger.warning(f"Could not get search info: {e}")
 
@@ -477,6 +532,115 @@ class Chat(Controller):
             raise HTTPException(
                 status_code=HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Internal server error while getting search info",
+            )
+
+    @get("/chat/agent-stats", status_code=HTTP_200_OK)
+    async def get_agent_system_stats(self) -> dict:
+        """Lấy thống kê Agent system."""
+        try:
+            qa_pipeline = get_qa_pipeline()
+            
+            if hasattr(qa_pipeline, 'agent_system') and qa_pipeline.agent_system:
+                stats = qa_pipeline.agent_system.get_stats()
+                return {
+                    "agent_enabled": True,
+                    "system_stats": stats,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            elif hasattr(qa_pipeline, 'llm_search_system') and qa_pipeline.llm_search_system:
+                stats = qa_pipeline.llm_search_system.get_system_stats()
+                return {
+                    "llm_enabled": True,
+                    "system_stats": stats,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                return {
+                    "ai_system_enabled": False,
+                    "message": "No AI system available",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Get agent stats error: {e}")
+            raise HTTPException(
+                status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while getting agent stats",
+            )
+
+    @post("/chat/agent-reset", status_code=HTTP_200_OK)
+    async def reset_agent_stats(self) -> dict:
+        """Reset Agent system statistics."""
+        try:
+            qa_pipeline = get_qa_pipeline()
+            
+            if hasattr(qa_pipeline, 'agent_system') and qa_pipeline.agent_system:
+                qa_pipeline.agent_system.reset_stats()
+                stats = qa_pipeline.agent_system.get_stats()
+                
+                return {
+                    "success": True,
+                    "message": "Agent statistics reset successfully",
+                    "stats": stats,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            elif hasattr(qa_pipeline, 'llm_search_system') and qa_pipeline.llm_search_system:
+                qa_pipeline.llm_search_system.optimize_performance()
+                stats = qa_pipeline.llm_search_system.get_system_stats()
+                
+                return {
+                    "success": True,
+                    "message": "LLM system optimized successfully",
+                    "stats": stats,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "No AI system available",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Reset agent system error: {e}")
+            raise HTTPException(
+                status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while resetting agent system",
+            )
+
+    @get("/chat/agent-tools", status_code=HTTP_200_OK)
+    async def get_available_tools(self) -> dict:
+        """Lấy danh sách tools khả dụng của Agent."""
+        try:
+            qa_pipeline = get_qa_pipeline()
+            
+            if hasattr(qa_pipeline, 'agent_system') and qa_pipeline.agent_system:
+                tools_info = []
+                for tool in qa_pipeline.agent_system.tools:
+                    tools_info.append({
+                        "name": tool.name,
+                        "description": tool.description,
+                        "args_schema": tool.args_schema.schema() if tool.args_schema else None
+                    })
+                
+                return {
+                    "agent_enabled": True,
+                    "available_tools": tools_info,
+                    "total_tools": len(tools_info),
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                return {
+                    "agent_enabled": False,
+                    "message": "Agent system not available",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Get tools error: {e}")
+            raise HTTPException(
+                status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while getting tools",
             )
 
     @get("/chat/suggestions", status_code=HTTP_200_OK)

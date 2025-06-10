@@ -9,13 +9,14 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import (
     RunnableLambda,
     RunnableParallel,
-    RunnablePassthrough,
 )
 from langchain_openai import ChatOpenAI
 
 from ..config import config, logger
 from .vectorstore import VectorStore
 from .web_search import HybridSearcher, WebSearcher
+from .llm_search_system import LLMSearchSystem
+from .agent_system import ProductAssistantAgent, get_agent
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -37,6 +38,8 @@ class LangchainPipeline:
         vector_store: Optional[VectorStore] = None,
         enable_web_search: bool = None,
         web_search_threshold: float = None,
+        use_llm_search_system: bool = True,
+        use_agent_system: bool = True,
     ):
         """Initialize the LangChain pipeline."""
         # Initialize the language model
@@ -67,9 +70,37 @@ class LangchainPipeline:
             and self.web_searcher.is_available()
             else None
         )
+        
+        # Initialize LLM search system
+        self.use_llm_search_system = use_llm_search_system and self.enable_web_search and not use_agent_system
+        self.llm_search_system = (
+            LLMSearchSystem(
+                model_name=model_name, 
+                web_searcher=self.web_searcher,
+                cache_enabled=True,
+                fallback_enabled=True
+            )
+            if self.use_llm_search_system
+            else None
+        )
+        
+        # Initialize Agent system (replaces LLM search system when enabled)
+        self.use_agent_system = use_agent_system and self.enable_web_search
+        self.agent_system = (
+            ProductAssistantAgent(
+                model_name=model_name,
+                temperature=0.3,
+                verbose=False
+            )
+            if self.use_agent_system
+            else None
+        )
 
         # Set up the pipeline
         self.pipeline = self._create_pipeline()
+        
+        # Initialize logger
+        self.logger = logger
 
     def _create_pipeline(self):
         """Create the LangChain pipeline for Q&A."""
@@ -86,7 +117,9 @@ class LangchainPipeline:
         3. Có thể tham khảo thông tin bổ sung từ tìm kiếm web để cung cấp thông tin cập nhật.
         4. Nếu không tìm thấy thông tin trong bối cảnh, hãy sử dụng tìm kiếm web để tìm thông tin liên quan đến lĩnh vực điện tử.
         5. Nếu người dùng yêu cầu so sánh các sản phẩm, hãy so sánh dựa trên các thông số kỹ thuật có sẵn.
-        6. Chỉ trả lời "Tôi không có thông tin về điều này" khi câu hỏi hoàn toàn không liên quan đến lĩnh vực điện tử hoặc sản phẩm.
+        6. Chú ý đến các từ tham chiếu như "điện thoại trên", "sản phẩm đó", "thiết bị này" - hãy tham khảo lịch sử cuộc trò chuyện để hiểu rõ người dùng đang nói về sản phẩm nào.
+        7. Khi người dùng nói "so sánh với điện thoại trên" hoặc tương tự, hãy xác định sản phẩm được nhắc đến trước đó trong cuộc trò chuyện.
+        8. Chỉ trả lời "Tôi không có thông tin về điều này" khi câu hỏi hoàn toàn không liên quan đến lĩnh vực điện tử hoặc sản phẩm.
         """
 
         rag_prompt = ChatPromptTemplate.from_messages(
@@ -99,73 +132,81 @@ class LangchainPipeline:
         )
 
         # Define hybrid context retrieval function
-        def get_hybrid_context(question: str) -> str:
-            # Get vector store results
-            vector_docs = retriever.invoke(question)
+        def get_hybrid_context(input_data: dict) -> str:
+            # Extract original question and enhanced question
+            original_question = input_data.get("original_question", input_data.get("question", ""))
+            enhanced_question = input_data.get("question", "")
+            # Use enhanced question for vector search (with history context)
+            vector_docs = retriever.invoke(enhanced_question)
             vector_context = self._format_vector_context(vector_docs)
 
-            # Check if question is related to electronics field
-            electronics_keywords = [
-                "điện tử",
-                "công nghệ",
-                "smartphone",
-                "laptop",
-                "máy tính",
-                "điện thoại",
-                "tablet",
-                "smartwatch",
-                "tai nghe",
-                "loa",
-                "camera",
-                "tivi",
-                "smart tv",
-                "gaming",
-                "console",
-                "pc",
-                "macbook",
-                "iphone",
-                "samsung",
-                "xiaomi",
-                "oppo",
-                "vivo",
-                "realme",
-                "asus",
-                "acer",
-                "dell",
-                "hp",
-                "lenovo",
-                "sản phẩm",
-                "mua",
-                "bán",
-                "giá",
-                "thông số",
-                "cấu hình",
-            ]
+            # Get conversation history for context
+            conversation_history = getattr(self, '_current_conversation_history', None)
 
-            is_electronics_related = any(
-                keyword in question.lower() for keyword in electronics_keywords
+            # Use Agent system if available (highest priority)
+            if self.use_agent_system and self.agent_system:
+                try:
+                    agent_result = self.agent_system.process_query(
+                        original_question, conversation_history
+                    )
+                    
+                    if agent_result["success"]:
+                        # Log agent tool usage
+                        tools_used = [tool["tool"] for tool in agent_result["tools_used"]]
+                        self.logger.info(f"Agent used tools: {tools_used} (time: {agent_result['processing_time']:.2f}s)")
+                        
+                        # Return agent response
+                        return agent_result["response"]
+                    else:
+                        self.logger.warning(f"Agent failed: {agent_result.get('error', 'Unknown error')}")
+                        # Fall through to LLM search system or rules
+                        
+                except Exception as e:
+                    self.logger.warning(f"Agent system failed, falling back: {e}")
+                    # Fall through to LLM search system or rules
+            
+            # Use LLM search system if available (fallback from agent)
+            elif self.use_llm_search_system and self.llm_search_system:
+                try:
+                    web_results, search_decision = self.llm_search_system.execute_complete_search(
+                        original_question, vector_docs, conversation_history
+                    )
+                    
+                    # Log LLM decision details
+                    self.logger.info(f"LLM search decision: {search_decision.reasoning} (confidence: {search_decision.confidence:.2f})")
+                    
+                    if web_results and search_decision.should_search:
+                        # Use LLM system's results
+                        formatted_web_results = self.web_searcher.format_search_results(web_results)
+                        if vector_context and vector_context.strip():
+                            return f"{vector_context}\n\n{formatted_web_results}"
+                        return formatted_web_results
+                    
+                    # LLM decided not to search, use vector results only
+                    return vector_context
+                    
+                except Exception as e:
+                    self.logger.warning(f"LLM search system failed, falling back to rule-based: {e}")
+                    # Fall through to rule-based logic
+            
+            # Fallback to simplified rule-based logic (only when LLM system fails)
+            should_search = (
+                not vector_docs or
+                len(vector_docs) < 2 or
+                any(keyword in original_question.lower() for keyword in ["giá", "so sánh", "mới", "2024", "2025", "khuyến mãi"])
             )
 
-            # Always use web search for electronics-related queries when vector results are insufficient
-            # or when explicitly needed for comprehensive answers
-            should_search = False
-
-            if self.hybrid_searcher:
-                # Check if we should use web search based on improved logic
-                should_search = self.hybrid_searcher.should_use_web_search(
-                    vector_docs, question
-                )
-
-                # Force web search for electronics queries with poor vector results
-                if is_electronics_related and (not vector_docs or len(vector_docs) < 2):
-                    should_search = True
-
             if should_search and self.web_searcher:
-                # Perform web search
-                web_results = self.web_searcher.search_product_info(question)
+                # Extract clean search query that resolves references from history
+                search_query = self._extract_search_query(original_question, conversation_history)
+                # Perform web search using clean search query
+                web_results = self.web_searcher.search_product_info(search_query)
 
                 # Combine results
-                return self.hybrid_searcher.combine_results(vector_context, web_results)
+                if vector_context and vector_context.strip():
+                    formatted_web_results = self.web_searcher.format_search_results(web_results)
+                    return f"{vector_context}\n\n{formatted_web_results}"
+                return self.web_searcher.format_search_results(web_results)
 
             return vector_context
 
@@ -174,7 +215,7 @@ class LangchainPipeline:
             RunnableParallel(
                 {
                     "context": RunnableLambda(get_hybrid_context),
-                    "question": RunnablePassthrough(),
+                    "question": RunnableLambda(lambda x: x.get("question", x) if isinstance(x, dict) else x),
                 }
             )
             | rag_prompt
@@ -193,28 +234,111 @@ class LangchainPipeline:
             [f"Sản phẩm {i + 1}:\n" + doc.page_content for i, doc in enumerate(docs)]
         )
 
-    def answer_question(self, question: str) -> str:
+    def answer_question(self, question: str, conversation_history: Optional[List[dict]] = None) -> str:
         """Process a user question and return an answer."""
         try:
-            response = self.pipeline.invoke(question)
+            # Store conversation history for web search access
+            self._current_conversation_history = conversation_history
+            # Include conversation history in the question context
+            enhanced_question = self._enhance_question_with_history(question, conversation_history)
+            # Create input with both original and enhanced questions
+            pipeline_input = {
+                "question": enhanced_question,
+                "original_question": question
+            }
+            response = self.pipeline.invoke(pipeline_input)
             return response
         except Exception as e:
-            logger.error("Error answering question", error=e)
+            self.logger.error("Error answering question", error=e)
             return "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi của bạn."
+        finally:
+            # Clean up temporary storage
+            self._current_conversation_history = None
 
-    def answer_question_stream(self, question: str) -> Iterator[str]:
+    def answer_question_stream(self, question: str, conversation_history: Optional[List[dict]] = None) -> Iterator[str]:
         """Process a user question and stream the answer."""
         try:
-            for chunk in self.pipeline.stream(question):
+            # Store conversation history for web search access
+            self._current_conversation_history = conversation_history
+            # Include conversation history in the question context
+            enhanced_question = self._enhance_question_with_history(question, conversation_history)
+            # Create input with both original and enhanced questions
+            pipeline_input = {
+                "question": enhanced_question,
+                "original_question": question
+            }
+            for chunk in self.pipeline.stream(pipeline_input):
                 yield chunk
         except Exception as e:
-            logger.error("Error streaming answer", error=e)
+            self.logger.error("Error streaming answer", error=e)
             yield "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi của bạn."
+        finally:
+            # Clean up temporary storage
+            self._current_conversation_history = None
+
+    def _enhance_question_with_history(self, question: str, conversation_history: Optional[List[dict]] = None) -> str:
+        """Enhance the question with conversation history context."""
+        if not conversation_history or len(conversation_history) == 0:
+            return question
+        # Build context from recent conversation history (last 3 messages)
+        recent_history = conversation_history[-3:] if len(conversation_history) > 3 else conversation_history
+        context_parts = []
+        for msg in recent_history:
+            user_msg = msg.get('message', '')
+            bot_response = msg.get('response', '')
+            if user_msg and bot_response:
+                context_parts.append(f"Người dùng: {user_msg}")
+                context_parts.append(f"Trợ lý: {bot_response}")
+        if context_parts:
+            history_context = "\n".join(context_parts)
+            enhanced_question = f"""Lịch sử cuộc trò chuyện gần đây:
+{history_context}
+
+Câu hỏi hiện tại: {question}
+
+Lưu ý: Khi người dùng nói "điện thoại trên", "sản phẩm trên", "thiết bị đó" hoặc các từ tham chiếu tương tự, hãy tham khảo thông tin từ lịch sử cuộc trò chuyện ở trên."""
+            return enhanced_question
+        return question
+
+    def _extract_search_query(self, question: str, conversation_history: Optional[List[dict]] = None) -> str:
+        """Extract clean search query from question, resolving references from history."""
+        if not conversation_history:
+            return question
+        # Check if question contains references
+        reference_phrases = [
+            "điện thoại trên", "sản phẩm trên", "thiết bị trên", "máy trên",
+            "điện thoại đó", "sản phẩm đó", "thiết bị đó", "máy đó",
+            "điện thoại này", "sản phẩm này", "thiết bị này", "máy này"
+        ]
+
+        has_reference = any(phrase in question.lower() for phrase in reference_phrases)
+        if not has_reference:
+            return question
+        # Find the most recent product mentioned in history
+        recent_history = conversation_history[-3:] if len(conversation_history) > 3 else conversation_history
+        for msg in reversed(recent_history):
+            user_msg = msg.get('message', '').lower()
+            bot_response = msg.get('response', '').lower()
+            # Look for product names in user messages and bot responses
+            product_names = [
+                'iphone', 'samsung', 'xiaomi', 'oppo', 'vivo', 'realme',
+                'oneplus', 'huawei', 'nokia', 'sony', 'lg', 'motorola',
+                'asus', 'acer', 'dell', 'hp', 'lenovo', 'macbook',
+                'ipad', 'galaxy', 'redmi', 'mi ', 'poco', 'iqoo'
+            ]
+            for name in product_names:
+                if name in user_msg or name in bot_response:
+                    # Replace reference with the product name
+                    clean_query = question.lower()
+                    for phrase in reference_phrases:
+                        clean_query = clean_query.replace(phrase, name)
+                    return clean_query
+        return question
 
     def add_conversation_memory(self, memory):
-        """Add conversation memory to the pipeline (to be implemented)."""
-        # This would be implemented to incorporate conversation history
-        # Will require setting up a conversational chain with memory
+        """Add conversation memory to the pipeline (deprecated - use conversation_history parameter instead)."""
+        # This method is kept for backward compatibility
+        # Use conversation_history parameter in answer_question methods instead
         pass
 
     def get_search_info(self, question: str) -> dict:
@@ -233,11 +357,55 @@ class LangchainPipeline:
                     for doc in vector_docs[:2]
                 ],
                 "web_search_enabled": self.enable_web_search,
-                "web_search_available": self.hybrid_searcher is not None,
+                "llm_search_system_enabled": self.use_llm_search_system,
+                "agent_system_enabled": self.use_agent_system,
             }
 
-            # Check if web search would be used
-            if self.hybrid_searcher:
+            # Get Agent system info if available
+            if self.use_agent_system and self.agent_system:
+                conversation_history = getattr(self, '_current_conversation_history', None)
+                agent_result = self.agent_system.process_query(question, conversation_history)
+                
+                info.update({
+                    "agent_decision": {
+                        "success": agent_result["success"],
+                        "tools_used": [tool["tool"] for tool in agent_result["tools_used"]],
+                        "processing_time": agent_result["processing_time"],
+                        "agent_reasoning": agent_result.get("agent_reasoning", [])
+                    },
+                    "agent_stats": self.agent_system.get_stats(),
+                })
+            
+            # Get LLM search system decision if available (fallback)
+            elif self.use_llm_search_system and self.llm_search_system:
+                conversation_history = getattr(self, '_current_conversation_history', None)
+                search_decision = self.llm_search_system.decide_search_strategy(
+                    question, vector_docs, conversation_history
+                )
+                
+                info.update({
+                    "llm_decision": {
+                        "should_search": search_decision.should_search,
+                        "reasoning": search_decision.reasoning,
+                        "confidence": search_decision.confidence,
+                        "search_type": search_decision.search_type,
+                        "urgency": search_decision.urgency,
+                    },
+                    "system_stats": self.llm_search_system.get_system_stats(),
+                })
+                
+                if search_decision.should_search:
+                    query_result = self.llm_search_system.generate_search_queries(
+                        question, search_decision.expected_info_types, conversation_history
+                    )
+                    info["generated_queries"] = {
+                        "primary": query_result.primary_query,
+                        "alternatives": query_result.alternative_queries,
+                        "reasoning": query_result.query_reasoning,
+                    }
+            
+            # Fallback info for rule-based logic
+            elif self.hybrid_searcher:
                 should_use_web = self.hybrid_searcher.should_use_web_search(
                     vector_docs, question
                 )
@@ -269,5 +437,21 @@ class LangchainPipeline:
         if self.web_searcher and self.web_searcher.is_available():
             self.enable_web_search = True
             self.hybrid_searcher = HybridSearcher(self.web_searcher)
+            
+            # Initialize or recreate LLM search system
+            if self.use_llm_search_system:
+                self.llm_search_system = LLMSearchSystem(
+                    web_searcher=self.web_searcher,
+                    cache_enabled=True,
+                    fallback_enabled=True
+                )
+            
+            # Initialize or recreate Agent system
+            if self.use_agent_system:
+                self.agent_system = ProductAssistantAgent(
+                    temperature=0.3,
+                    verbose=False
+                )
+            
             # Recreate pipeline with new settings
             self.pipeline = self._create_pipeline()
