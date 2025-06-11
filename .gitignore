@@ -59,3 +59,4 @@ coverage.xml
 *.docx
 /test.py
 *.json
+build.sh
