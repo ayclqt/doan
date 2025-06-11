@@ -35,7 +35,6 @@ services:
 #      CHUNK_OVERLAP: 200
 #      CLEANED_DATA_PATH: cleaned_data.json
 #      REDIS_URL: redis://redis:6379
-
 #  ui:
 #    build: .
 #    restart: always

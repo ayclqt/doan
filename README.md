@@ -1,12 +1,5 @@
 # Hệ Thống Hỏi Đáp Sản Phẩm Điện Tử Thông Minh
 
-## Main/Production Status
-[![main pipeline status](https://gitlab.com/ayclqt/doan/badges/main/pipeline.svg)](https://gitlab.com/ayclqt/doan/-/commits/main)
-## Development Status
-[![dev pipeline status](https://gitlab.com/ayclqt/doan/badges/dev/pipeline.svg)](https://gitlab.com/ayclqt/doan/-/commits/dev)
-
-[![Latest Release](https://gitlab.com/ayclqt/doan/-/badges/release.svg)](https://gitlab.com/ayclqt/doan/-/releases)
-
 Dự án này xây dựng một hệ thống trợ lý AI thông minh sử dụng LangChain và Vector Database Qdrant để tìm kiếm, so sánh và trả lời câu hỏi liên quan đến thông tin sản phẩm điện tử. Hệ thống có khả năng hiểu ngữ cảnh câu hỏi bằng tiếng Việt, tìm kiếm thông tin chính xác và cung cấp câu trả lời chi tiết dựa trên cơ sở dữ liệu sản phẩm được thu thập.
 
 **🆕 Tính năng mới**: Hệ thống đã được tích hợp **DuckDuckGo Web Search** để tự động bổ sung thông tin mới nhất từ internet khi cơ sở dữ liệu nội bộ không đủ thông tin hoặc thiếu dữ liệu cập nhật.
