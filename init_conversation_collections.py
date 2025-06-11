@@ -65,7 +65,9 @@ async def init_conversation_collections():
 
         # Check if collections already exist
         if await check_conversation_collections_exist():
-            logger.info("✅ Conversation collections initialization skipped - collections already exist")
+            logger.info(
+                "✅ Conversation collections initialization skipped - collections already exist"
+            )
             return
 
         logger.info("🔄 Creating conversation collections...")
@@ -75,6 +77,7 @@ async def init_conversation_collections():
 
         # Verify collections were created successfully
         from qdrant_client import QdrantClient
+
         client = QdrantClient(url=config.qdrant_url, port=config.qdrant_port)
         collections = client.get_collections()
         collection_names = [collection.name for collection in collections.collections]
@@ -83,9 +86,17 @@ async def init_conversation_collections():
         messages_created = "conversation_messages" in collection_names
 
         if conversations_created and messages_created:
-            logger.info("✅ Conversation collections initialized successfully", conversations=conversation_service.conversations_collection, messages=conversation_service.messages_collection)
+            logger.info(
+                "✅ Conversation collections initialized successfully",
+                conversations=conversation_service.conversations_collection,
+                messages=conversation_service.messages_collection,
+            )
         else:
-            logger.error("❌ Failed to create some conversation collections", conversations='✅' if conversations_created else '❌', conversation_messages='✅' if messages_created else '❌')
+            logger.error(
+                "❌ Failed to create some conversation collections",
+                conversations="✅" if conversations_created else "❌",
+                conversation_messages="✅" if messages_created else "❌",
+            )
             raise Exception("Collection creation verification failed")
 
     except Exception as e:
@@ -99,17 +110,30 @@ async def check_qdrant_connection():
         client = QdrantClient(url=config.qdrant_url, port=config.qdrant_port)
         collections = client.get_collections()
 
-        logger.info("✅ Qdrant connection successful", numbers=len(collections.collections), collections=[collection.name for collection in collections.collections])
+        logger.info(
+            "✅ Qdrant connection successful",
+            numbers=len(collections.collections),
+            collections=[collection.name for collection in collections.collections],
+        )
 
         return True
     except Exception as e:
-        logger.error("❌ Qdrant connection failed! Please make sure Qdrant is running and accessible!", host=config.qdrant_url, port=config.qdrant_port, error=str(e))
+        logger.error(
+            "❌ Qdrant connection failed! Please make sure Qdrant is running and accessible!",
+            host=config.qdrant_url,
+            port=config.qdrant_port,
+            error=str(e),
+        )
         return False
 
 
 async def main():
     """Main function"""
-    logger.info("🚀 Initializing Qdrant collections for conversation storage...", host=config.qdrant_url, port=config.qdrant_port)
+    logger.info(
+        "🚀 Initializing Qdrant collections for conversation storage...",
+        host=config.qdrant_url,
+        port=config.qdrant_port,
+    )
 
     # Check Qdrant connection first
     if not await check_qdrant_connection():
@@ -118,7 +142,9 @@ async def main():
     # Initialize conversation collections
     await init_conversation_collections()
 
-    logger.info("✅ Conversation collections initialization completed!The system is now ready to store chat history in Qdrant.")
+    logger.info(
+        "✅ Conversation collections initialization completed!The system is now ready to store chat history in Qdrant."
+    )
 
 
 if __name__ == "__main__":
