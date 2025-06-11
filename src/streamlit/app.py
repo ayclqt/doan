@@ -6,7 +6,9 @@ Phiên bản sạch với token validation
 
 import asyncio
 import json
+import os
 import time
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from typing import Any, AsyncGenerator, Dict, Optional
 
@@ -23,10 +25,11 @@ __email__ = "quangtri.lam.9@gmail.com"
 __status__ = "Development"
 
 # ================== CONFIGURATION ==================
-API_BASE_URL = "http://localhost:8000"
-API_TIMEOUT = 300
-MAX_MESSAGE_LENGTH = 1000
-SESSION_TIMEOUT_MINUTES = 30
+load_dotenv()  # Tải biến môi trường từ file .env nếu có
+API_BASE_URL = os.getenv("API_KEY_URL", "http://localhost:8000")
+API_TIMEOUT = os.getenv("API_TIMEOUT", 300)
+MAX_MESSAGE_LENGTH = os.getenv("MAX_MESSAGE_LENGTH", 1000)
+SESSION_TIMEOUT_MINUTES = os.getenv("SESSION_TIMEOUT_MINUTES", 30)
 
 # ================== STREAMLIT CONFIG ==================
 st.set_page_config(
