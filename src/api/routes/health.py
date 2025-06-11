@@ -56,8 +56,8 @@ class Health(Controller):
                 services_status["vector_store"] = "healthy"
 
                 # Quick test
-                pipeline = LangchainPipeline(vector_store=vector_store)
-                services_status["langchain_pipeline"] = "healthy"
+                if LangchainPipeline(vector_store=vector_store):
+                    services_status["langchain_pipeline"] = "healthy"
             except Exception as e:
                 services_status["vector_store"] = f"unhealthy: {e!s}"
                 services_status["langchain_pipeline"] = f"unhealthy: {e!s}"
@@ -79,13 +79,13 @@ class Health(Controller):
                 "version": "1.0.0",
                 "environment": config.deploy_env,
                 "services": services_status,
-                "uptime": "N/A",  # Có thể implement sau
-                "memory_usage": "N/A",  # Có thể implement sau
-                "system_info": {
-                    "python_version": "3.11+",
-                    "litestar_version": "2.x",
-                    "langchain_version": "0.x",
-                },
+                # "uptime": "N/A",  # Có thể implement sau
+                # "memory_usage": "N/A",  # Có thể implement sau
+                # "system_info": {
+                #     "python_version": "3.11+",
+                #     "litestar_version": "2.x",
+                #     "langchain_version": "0.x",
+                # },
             }
 
         except Exception as e:

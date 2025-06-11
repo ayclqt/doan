@@ -5,10 +5,11 @@ Chat routes cho chatbot interactions với streaming support.
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, Dict, List, Optional, Any
 
-from litestar import Controller, delete, get, post
+from litestar import Controller, delete, get, post, Request
 from litestar.exceptions import HTTPException
+from litestar.security.jwt import Token
 from litestar.response import Stream
 from litestar.status_codes import (
     HTTP_200_OK,
@@ -18,7 +19,7 @@ from litestar.status_codes import (
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
 
-from ...config import logger
+from ...config import config, logger
 from ...langchain_integration import LangchainPipeline, VectorStore
 from ..schemas import (
     ChatHistoryResponse,
@@ -32,6 +33,7 @@ from ..schemas import (
     SuccessResponse,
     User,
 )
+from ..services import ConversationService
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -43,7 +45,7 @@ __status__ = "Development"
 
 # Global instances
 _qa_pipeline: Optional[LangchainPipeline] = None
-_conversations: Dict[str, Dict] = {}  # In-memory storage cho demo
+_conversation_service: Optional[ConversationService] = None
 
 
 def struct_to_dict(struct_obj) -> Dict:
@@ -78,28 +80,57 @@ def get_qa_pipeline() -> LangchainPipeline:
     return _qa_pipeline
 
 
+async def get_conversation_service() -> ConversationService:
+    """Get or create ConversationService instance."""
+    global _conversation_service
+    try:
+        if _conversation_service is None:
+            logger.info(
+                f"Initializing ConversationService with admin_username: {config.api_user}"
+            )
+            _conversation_service = ConversationService(admin_username=config.api_user)
+            logger.info("ConversationService initialized successfully")
+        else:
+            # Update admin_username in case it wasn't set correctly before
+            if _conversation_service.admin_username != config.api_user:
+                logger.warning(
+                    f"Updating ConversationService admin_username from {_conversation_service.admin_username} to {config.api_user}"
+                )
+                _conversation_service.admin_username = config.api_user
+            logger.debug(
+                f"Using ConversationService with admin_username: {_conversation_service.admin_username}"
+            )
+
+        return _conversation_service
+    except Exception as e:
+        logger.error(f"Failed to initialize ConversationService: {e}")
+        raise HTTPException(
+            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to initialize conversation service",
+        )
+
+
 def create_conversation_id() -> str:
     """Tạo conversation ID mới."""
     return str(uuid.uuid4())
 
 
-def get_or_create_conversation(
-    conversation_id: Optional[str], user_id: Optional[int] = None
+async def get_or_create_conversation(
+    conversation_id: Optional[str], user_id: str, username: str
 ) -> str:
     """Get existing hoặc tạo conversation mới."""
-    if not conversation_id:
-        conversation_id = create_conversation_id()
+    conversation_service = await get_conversation_service()
 
-    if conversation_id not in _conversations:
-        _conversations[conversation_id] = {
-            "id": conversation_id,
-            "user_id": user_id,
-            "created_at": datetime.now(timezone.utc),
-            "last_updated": datetime.now(timezone.utc),
-            "messages": [],
-            "title": None,
-            "description": None,
-        }
+    if not conversation_id:
+        conversation_id = conversation_service.create_conversation(user_id=user_id)
+    else:
+        # Check if conversation exists
+        existing_conversation = conversation_service.get_conversation(
+            conversation_id, user_id, username
+        )
+        if not existing_conversation:
+            # Create new conversation with the provided ID
+            conversation_id = conversation_service.create_conversation(user_id=user_id)
 
     return conversation_id
 
@@ -108,14 +139,27 @@ async def stream_chat_response(
     message: str,
     conversation_id: str,
     qa_pipeline: LangchainPipeline,
+    user_id: str,
+    username: str,
     include_search_info: bool = False,
 ) -> AsyncIterator[str]:
     """Stream chat response với Server-Sent Events format."""
     try:
+        conversation_service = await get_conversation_service()
+
         # Get conversation history for context
+        conversation_messages = conversation_service.get_conversation_messages(
+            conversation_id, user_id, username
+        )
         conversation_history = []
-        if conversation_id in _conversations:
-            conversation_history = _conversations[conversation_id]["messages"]
+        for msg in conversation_messages:
+            conversation_history.append(
+                {
+                    "message": msg["message"],
+                    "response": msg["response"],
+                    "timestamp": msg["timestamp"],
+                }
+            )
 
         # Send start event
         start_chunk = ChatStreamChunk(
@@ -179,20 +223,20 @@ async def stream_chat_response(
             except Exception as e:
                 logger.warning(f"Could not get search info: {e}")
 
-        # Save to conversation history
-        if conversation_id in _conversations:
-            history_item = ConversationHistory(
-                id=str(uuid.uuid4()),
+        # Save to conversation history using ConversationService
+        conversation_service = await get_conversation_service()
+        try:
+            conversation_service.add_message(
+                conversation_id=conversation_id,
                 message=message,
                 response=full_response,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                user_id=user_id,
+                username=username,
                 response_time=0.0,
                 search_info=search_info,
             )
-            _conversations[conversation_id]["messages"].append(
-                struct_to_dict(history_item)
-            )
-            _conversations[conversation_id]["last_updated"] = datetime.now(timezone.utc)
+        except Exception as e:
+            logger.warning(f"Failed to save streaming message to conversation: {e}")
 
         # Send end event with metadata
         end_chunk = ChatStreamChunk(
@@ -226,15 +270,16 @@ class Chat(Controller):
 
     @post("/", status_code=HTTP_200_OK)
     async def chat(
-        self, data: ChatRequest, user: User | None = None
+        self, request: Request[User, Token, Any], data: ChatRequest
     ) -> ChatResponse | Stream:
         """Main chat endpoint với streaming support."""
         try:
+            user: User = request.user
             qa_pipeline = get_qa_pipeline()
 
             # Get or create conversation
-            conversation_id = get_or_create_conversation(
-                data.conversation_id, user.id if user else None
+            conversation_id = await get_or_create_conversation(
+                data.conversation_id, user.id, user.username
             )
 
             # Configure web search if specified
@@ -251,6 +296,8 @@ class Chat(Controller):
                         data.message,
                         conversation_id,
                         qa_pipeline,
+                        user.id,
+                        user.username,
                         data.include_search_info,
                     ),
                     media_type="text/plain",
@@ -263,9 +310,21 @@ class Chat(Controller):
                 )
 
             # Get conversation history for context
+            conversation_service = await get_conversation_service()
+            conversation_messages = conversation_service.get_conversation_messages(
+                conversation_id,
+                user.id,
+                user.username,
+            )
             conversation_history = []
-            if conversation_id in _conversations:
-                conversation_history = _conversations[conversation_id]["messages"]
+            for msg in conversation_messages:
+                conversation_history.append(
+                    {
+                        "message": msg["message"],
+                        "response": msg["response"],
+                        "timestamp": msg["timestamp"],
+                    }
+                )
 
             # Non-streaming response
             start_time = datetime.now(timezone.utc)
@@ -319,21 +378,19 @@ class Chat(Controller):
                     logger.warning(f"Could not get search info: {e}")
 
             # Save to conversation history
-            if conversation_id in _conversations:
-                history_item = ConversationHistory(
-                    id=str(uuid.uuid4()),
+            conversation_service = await get_conversation_service()
+            try:
+                conversation_service.add_message(
+                    conversation_id=conversation_id,
                     message=data.message,
                     response=response,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    user_id=user.id,
+                    username=user.username,
                     response_time=response_time,
                     search_info=search_info,
                 )
-                _conversations[conversation_id]["messages"].append(
-                    struct_to_dict(history_item)
-                )
-                _conversations[conversation_id]["last_updated"] = datetime.now(
-                    timezone.utc
-                )
+            except Exception as e:
+                logger.warning(f"Failed to save message to conversation: {e}")
 
             logger.info(f"Chat request processed: {len(data.message)} chars")
 
@@ -357,31 +414,30 @@ class Chat(Controller):
 
     @post("/conversations", status_code=HTTP_201_CREATED)
     async def create_conversation(
-        self, data: ConversationCreate, user: Optional[User] = None
+        self, request: Request[User, Token, Any], data: ConversationCreate
     ) -> ConversationResponse:
         """Tạo conversation mới."""
         try:
-            conversation_id = create_conversation_id()
+            user: User = request.user
+            conversation_service = await get_conversation_service()
 
-            _conversations[conversation_id] = {
-                "id": conversation_id,
-                "user_id": user.id if user else None,
-                "created_at": datetime.now(timezone.utc),
-                "last_updated": datetime.now(timezone.utc),
-                "messages": [],
-                "title": data.title,
-                "description": data.description,
-            }
+            conversation_id = conversation_service.create_conversation(
+                user_id=user.id,
+                title=data.title,
+                description=data.description,
+            )
 
-            conv = _conversations[conversation_id]
+            conv = conversation_service.get_conversation(
+                conversation_id, user.id, user.username
+            )
 
             return ConversationResponse(
                 id=conv["id"],
                 title=conv["title"],
                 description=conv["description"],
-                created_at=conv["created_at"].isoformat(),
-                last_updated=conv["last_updated"].isoformat(),
-                message_count=0,
+                created_at=conv["created_at"],
+                last_updated=conv["last_updated"],
+                message_count=conv.get("message_count", 0),
             )
 
         except Exception as e:
@@ -391,43 +447,36 @@ class Chat(Controller):
                 detail="Internal server error while creating conversation",
             )
 
-    @get(
-        "/conversations",
-        status_code=HTTP_200_OK,
-    )
+    @get("/conversations", status_code=HTTP_200_OK)
     async def list_conversations(
-        self, user: Optional[User] = None, limit: int = 20, offset: int = 0
+        self, request: Request[User, Token, Any], limit: int = 20, offset: int = 0
     ) -> List[ConversationResponse]:
         """Lấy danh sách conversations."""
         try:
+            user: User = request.user
+            conversation_service = await get_conversation_service()
+
+            conversations_data = conversation_service.list_conversations(
+                user_id=user.id,
+                username=user.username,
+                limit=limit,
+                offset=offset,
+            )
+
             conversations = []
-            user_id = user.id if user else None
-
-            for conv in _conversations.values():
-                # Filter by user if authenticated
-                if user and conv["user_id"] != user_id:
-                    continue
-                # For anonymous users, only show conversations without user_id
-                if not user and conv["user_id"] is not None:
-                    continue
-
+            for conv in conversations_data:
                 conversations.append(
                     ConversationResponse(
                         id=conv["id"],
                         title=conv["title"],
                         description=conv["description"],
-                        created_at=conv["created_at"].isoformat(),
-                        last_updated=conv["last_updated"].isoformat(),
-                        message_count=len(conv["messages"]),
+                        created_at=conv["created_at"],
+                        last_updated=conv["last_updated"],
+                        message_count=conv.get("message_count", 0),
                     )
                 )
 
-            # Sort by last_updated desc
-            conversations.sort(key=lambda x: x.last_updated, reverse=True)
-
-            # Apply pagination
-            return conversations[offset : offset + limit]
-
+            return conversations
         except Exception as e:
             logger.error(f"List conversations error: {e}")
             raise HTTPException(
@@ -437,37 +486,41 @@ class Chat(Controller):
 
     @get("/conversations/{conversation_id:str}", status_code=HTTP_200_OK)
     async def get_conversation_history(
-        self, conversation_id: str, user: User | None = None
+        self, request: Request[User, Token, Any], conversation_id: str
     ) -> ChatHistoryResponse:
         """Lấy lịch sử conversation."""
         try:
-            if conversation_id not in _conversations:
+            user: User = request.user
+            conversation_service = await get_conversation_service()
+
+            # Get conversation metadata
+            conversation = conversation_service.get_conversation(
+                conversation_id,
+                user.id,
+                user.username,
+            )
+            if not conversation:
                 raise HTTPException(
                     status_code=HTTP_404_NOT_FOUND, detail="Conversation not found"
                 )
 
-            conv = _conversations[conversation_id]
-
-            # Check permissions
-            if user and conv["user_id"] != user.id:
-                raise HTTPException(
-                    status_code=HTTP_404_NOT_FOUND, detail="Conversation not found"
-                )
-            if not user and conv["user_id"] is not None:
-                raise HTTPException(
-                    status_code=HTTP_404_NOT_FOUND, detail="Conversation not found"
-                )
+            # Get conversation messages
+            messages_data = conversation_service.get_conversation_messages(
+                conversation_id,
+                user.id,
+                user.username,
+            )
 
             # Convert messages to ConversationHistory objects
             messages = []
-            for msg in conv["messages"]:
+            for msg in messages_data:
                 messages.append(
                     ConversationHistory(
                         id=msg["id"],
                         message=msg["message"],
                         response=msg["response"],
                         timestamp=msg["timestamp"],
-                        response_time=msg["response_time"],
+                        response_time=msg.get("response_time"),
                         search_info=msg.get("search_info"),
                     )
                 )
@@ -476,8 +529,8 @@ class Chat(Controller):
                 conversation_id=conversation_id,
                 messages=messages,
                 total_messages=len(messages),
-                created_at=conv["created_at"].isoformat(),
-                last_updated=conv["last_updated"].isoformat(),
+                created_at=conversation["created_at"],
+                last_updated=conversation["last_updated"],
             )
 
         except HTTPException:
@@ -491,33 +544,26 @@ class Chat(Controller):
 
     @delete("/conversations/{conversation_id:str}", status_code=HTTP_200_OK)
     async def delete_conversation(
-        self, conversation_id: str, user: User = None
+        self, request: Request[User, Token, Any], conversation_id: str
     ) -> SuccessResponse:
         """Xóa conversation."""
         try:
-            if conversation_id not in _conversations:
+            user: User = request.user
+            conversation_service = await get_conversation_service()
+
+            success = conversation_service.delete_conversation(
+                conversation_id,
+                user.id,
+                user.username,
+            )
+            if not success:
                 raise HTTPException(
                     status_code=HTTP_404_NOT_FOUND, detail="Conversation not found"
                 )
 
-            conv = _conversations[conversation_id]
-
-            # Check permissions
-            if user and conv["user_id"] != user.id:
-                raise HTTPException(
-                    status_code=HTTP_404_NOT_FOUND, detail="Conversation not found"
-                )
-            if not user and conv["user_id"] is not None:
-                raise HTTPException(
-                    status_code=HTTP_404_NOT_FOUND, detail="Conversation not found"
-                )
-
-            # Delete conversation
-            del _conversations[conversation_id]
-
-            logger.info(f"Conversation deleted: {conversation_id}")
-
-            return SuccessResponse(message="Conversation deleted successfully")
+            return SuccessResponse(
+                success=True, message="Conversation deleted successfully"
+            )
 
         except HTTPException:
             raise
@@ -694,3 +740,43 @@ class Chat(Controller):
         ]
 
         return {"suggestions": suggestions, "context": "Sản phẩm điện tử và công nghệ"}
+
+    @post("/conversations/{conversation_id:str}/title", status_code=HTTP_200_OK)
+    async def update_conversation_title(
+        self, request: Request[User, Token, Any], conversation_id: str, data: dict
+    ) -> SuccessResponse:
+        """Cập nhật title của conversation."""
+        try:
+            user: User = request.user
+            conversation_service = await get_conversation_service()
+
+            title = data.get("title", "").strip()
+            if not title:
+                raise HTTPException(
+                    status_code=HTTP_400_BAD_REQUEST, detail="Title cannot be empty"
+                )
+
+            success = conversation_service.update_conversation_title(
+                conversation_id,
+                title,
+                user.id,
+                username=user.username,
+            )
+
+            if not success:
+                raise HTTPException(
+                    status_code=HTTP_404_NOT_FOUND, detail="Conversation not found"
+                )
+
+            return SuccessResponse(
+                success=True, message="Conversation title updated successfully"
+            )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Update conversation title error: {e}")
+            raise HTTPException(
+                status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while updating conversation title",
+            )

@@ -10,10 +10,10 @@ from .schemas import (
     ErrorResponse,
     LoginRequest,
     LoginResponse,
-    RegisterRequest,
-    RegisterResponse,
     SuccessResponse,
+    User,
 )
+from .services import ConversationService
 
 __all__ = [
     # Auth
@@ -26,10 +26,11 @@ __all__ = [
     "ChatResponse",
     "LoginRequest",
     "LoginResponse",
-    "RegisterRequest",
-    "RegisterResponse",
     "ErrorResponse",
     "SuccessResponse",
+    "User",
+    # Services
+    "ConversationService",
 ]
 
 __author__ = "Lâm Quang Trí"

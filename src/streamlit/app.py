@@ -571,7 +571,6 @@ def chat_interface():
         st.warning("⏰ Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.")
         clear_session()
         st.rerun()
-        return
 
     # Update activity
     update_activity()

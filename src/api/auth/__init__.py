@@ -1,7 +1,7 @@
-from .auth import AuthService, jwt_auth
+from .auth import AuthService, jwt_auth, get_current_user
 from .redis_service import redis_user_service
 
-__all__ = ["AuthService", "jwt_auth", "redis_user_service"]
+__all__ = ["AuthService", "jwt_auth", "get_current_user", "redis_user_service"]
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
