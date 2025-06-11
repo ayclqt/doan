@@ -30,7 +30,11 @@ async def check_admin_user_exists():
         # Check if admin user exists
         existing_user = await redis_user_service.get_user_by_username(config.api_user)
         if existing_user:
-            logger.warning("Admin user already exists", username=existing_user.username, user_id=existing_user.id)
+            logger.warning(
+                "Admin user already exists",
+                username=existing_user.username,
+                user_id=existing_user.id,
+            )
 
             # Verify authentication still works
             auth_user = await redis_user_service.authenticate_user(
@@ -74,7 +78,9 @@ async def init_admin_user():
                 username=admin_user.username,
                 user_id=admin_user.id,
             )
-            logger.info("✅ Admin user created", username=admin_user.username, id=admin_user.id)
+            logger.info(
+                "✅ Admin user created", username=admin_user.username, id=admin_user.id
+            )
         else:
             logger.error("❌ Failed to create admin user")
             sys.exit(1)
@@ -106,13 +112,21 @@ async def check_redis_connection():
         logger.info("✅ Redis connection successful")
         return True
     except Exception as e:
-        logger.error("❌ Redis connection failed! Please make sure Redis is running and accessible", redis=config.redis_url, error=str(e))
+        logger.error(
+            "❌ Redis connection failed! Please make sure Redis is running and accessible",
+            redis=config.redis_url,
+            error=str(e),
+        )
         return False
 
 
 async def main():
     """Main function"""
-    logger.info("🚀 Initializing admin user for JWT authentication...", redis=config.redis_url, username=config.api_user)
+    logger.info(
+        "🚀 Initializing admin user for JWT authentication...",
+        redis=config.redis_url,
+        username=config.api_user,
+    )
 
     # Check Redis connection first
     if not await check_redis_connection():
@@ -122,6 +136,7 @@ async def main():
     await init_admin_user()
 
     logger.info("✅ Admin user initialization completed!")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

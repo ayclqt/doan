@@ -621,58 +621,82 @@ def chat_interface():
                     handle_token_error()
                     return
 
-                # Show initial spinner
-                with st.spinner("🤖 Đang suy nghĩ..."):
-                    time.sleep(0.5)
+                # Create status container for better loading UX
+                status_container = st.status("🤖 Đang xử lý câu hỏi...", expanded=True)
 
-                # Stream response
-                async def process_stream():
-                    nonlocal full_response, search_info
+                try:
+                    # Stream response
+                    async def process_stream():
+                        nonlocal full_response, search_info
+                        first_chunk_received = False
 
-                    async for chunk in ChatService.send_message_stream(
-                        prompt,
-                        token,
-                        st.session_state.get("current_conversation_id"),
-                        include_search,
-                    ):
-                        if chunk["type"] == "start":
-                            st.session_state.current_conversation_id = chunk.get(
-                                "conversation_id"
-                            )
+                        with status_container:
+                            async for chunk in ChatService.send_message_stream(
+                                prompt,
+                                token,
+                                st.session_state.get("current_conversation_id"),
+                                include_search,
+                            ):
+                                if chunk["type"] == "start":
+                                    st.session_state.current_conversation_id = (
+                                        chunk.get("conversation_id")
+                                    )
 
-                        elif chunk["type"] == "chunk":
-                            content = chunk.get("content", "")
-                            full_response += content
-                            # Typing indicator
-                            message_placeholder.markdown(full_response + " ▌")
+                                elif chunk["type"] == "chunk":
+                                    content = chunk.get("content", "")
+                                    full_response += content
 
-                        elif chunk["type"] == "end":
-                            message_placeholder.markdown(full_response)
-                            metadata = chunk.get("metadata", {})
-                            if metadata.get("search_info"):
-                                search_info = metadata["search_info"]
+                                    # Update status and start showing content after first chunk
+                                    if not first_chunk_received:
+                                        status_container.update(
+                                            label="✅ Đang trả lời...",
+                                            state="running",
+                                            expanded=False,
+                                        )
+                                        first_chunk_received = True
 
-                        elif chunk["type"] == "error":
-                            error_content = chunk.get("content", "Unknown error")
-                            if error_content == "INVALID_TOKEN":
-                                st.error("❌ Phiên đăng nhập đã hết hạn.")
-                                handle_token_error()
-                                return
-                            else:
-                                st.error(f"❌ Lỗi: {error_content}")
-                                return
+                                    # Show typing indicator
+                                    message_placeholder.markdown(full_response + " ▌")
 
-                # Run streaming
-                run_async(process_stream())
+                                elif chunk["type"] == "end":
+                                    message_placeholder.markdown(full_response)
+                                    status_container.update(
+                                        label="✅ Hoàn thành!", state="complete"
+                                    )
+                                    metadata = chunk.get("metadata", {})
+                                    if metadata.get("search_info"):
+                                        search_info = metadata["search_info"]
 
-                # Add response to history
-                if full_response:
-                    add_message("assistant", full_response)
+                                elif chunk["type"] == "error":
+                                    error_content = chunk.get(
+                                        "content", "Unknown error"
+                                    )
+                                    status_container.update(
+                                        label="❌ Có lỗi xảy ra", state="error"
+                                    )
+                                    if error_content == "INVALID_TOKEN":
+                                        st.error("❌ Phiên đăng nhập đã hết hạn.")
+                                        handle_token_error()
+                                        return
+                                    else:
+                                        st.error(f"❌ Lỗi: {error_content}")
+                                        return
 
-                # Show search info if enabled
-                if search_info and include_search:
-                    with st.expander("🔍 Thông tin tìm kiếm", expanded=False):
-                        st.json(search_info)
+                    run_async(process_stream())
+
+                    # Add response to history
+                    if full_response:
+                        add_message("assistant", full_response)
+
+                    # Show search info if enabled
+                    if search_info and include_search:
+                        with st.expander("🔍 Thông tin tìm kiếm", expanded=False):
+                            st.json(search_info)
+
+                except Exception as stream_error:
+                    # Update status on error
+                    status_container.update(label="❌ Lỗi kết nối", state="error")
+                    st.error(f"❌ Lỗi khi xử lý phản hồi: {str(stream_error)}")
 
             except Exception as e:
                 st.error(f"❌ Lỗi khi gửi tin nhắn: {str(e)}")
@@ -704,4 +728,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()  # Cách chạy: streamlit run src/streamlit/app.py
