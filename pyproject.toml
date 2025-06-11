@@ -28,7 +28,7 @@ dependencies = [
     "streamlit",
     "duckduckgo-search",
     # API dependencies
-    "litestar[brotli,cryptography,jwt,standard,structlog]",
+    "litestar[brotli,cryptography,jwt,standard,structlog,redis]",
     "litestar-granian",
     "bcrypt",
     "md2docx-python",
