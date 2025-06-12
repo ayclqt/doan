@@ -1,4 +1,3 @@
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -61,7 +60,7 @@ class RedisUserService:
         redis_client = await self.get_redis_client()
 
         # Check if user already exists
-        if await redis_client.exists(f"user:{username}"):
+        if await redis_client.exists(f"index:{username}"):
             return None
 
         # Generate unique user ID
@@ -70,18 +69,18 @@ class RedisUserService:
         # Hash password
         hashed_password = self._hash_password(password)
 
-        # Create user data
+        # Create user data as hash
         user_data = {
             "id": user_id,
             "username": username,
-            "hashed_password": hashed_password,
+            "password": hashed_password,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "is_active": True,
+            "is_active": "1",  # Store as string for Redis compatibility
         }
 
-        # Store user data in Redis
-        await redis_client.set(f"user:{username}", json.dumps(user_data))
-        await redis_client.set(f"user_id:{user_id}", username)
+        # Store user data in Redis as hash
+        await redis_client.hset(f"user:{user_id}", mapping=user_data)
+        await redis_client.set(f"index:{username}", user_id)
 
         return User(
             id=user_id,
@@ -103,18 +102,20 @@ class RedisUserService:
         """
         redis_client = await self.get_redis_client()
 
-        user_data_str = await redis_client.get(f"user:{username}")
-        if not user_data_str:
+        user_id = await redis_client.get(f"index:{username}")
+        if not user_id:
             return None
 
-        user_data = json.loads(user_data_str)
+        user_data = await redis_client.hgetall(f"user:{user_id}")
+        if not user_data:
+            return None
 
         return User(
             id=user_data["id"],
             username=user_data["username"],
-            hashed_password=user_data["hashed_password"],
+            hashed_password=user_data["password"],
             created_at=datetime.fromisoformat(user_data["created_at"]),
-            is_active=user_data["is_active"],
+            is_active=user_data["is_active"] == "1",
         )
 
     async def get_user_by_id(self, user_id: str) -> Optional[User]:
@@ -129,11 +130,17 @@ class RedisUserService:
         """
         redis_client = await self.get_redis_client()
 
-        username = await redis_client.get(f"user_id:{user_id}")
-        if not username:
+        user_data = await redis_client.hgetall(f"user:{user_id}")
+        if not user_data:
             return None
 
-        return await self.get_user_by_username(username)
+        return User(
+            id=user_data["id"],
+            username=user_data["username"],
+            hashed_password=user_data["password"],
+            created_at=datetime.fromisoformat(user_data["created_at"]),
+            is_active=user_data["is_active"] == "1",
+        )
 
     async def authenticate_user(self, username: str, password: str) -> Optional[User]:
         """
@@ -164,11 +171,11 @@ class RedisUserService:
         """
         redis_client = await self.get_redis_client()
 
-        user_data_str = await redis_client.get(f"user:{username}")
-        if user_data_str:
-            user_data = json.loads(user_data_str)
-            user_data["last_login"] = datetime.now(timezone.utc).isoformat()
-            await redis_client.set(f"user:{username}", json.dumps(user_data))
+        user_id = await redis_client.get(f"index:{username}")
+        if user_id:
+            await redis_client.hset(
+                f"user:{user_id}", "last_login", datetime.now(timezone.utc).isoformat()
+            )
 
     async def deactivate_user(self, username: str) -> bool:
         """
@@ -182,14 +189,11 @@ class RedisUserService:
         """
         redis_client = await self.get_redis_client()
 
-        user_data_str = await redis_client.get(f"user:{username}")
-        if not user_data_str:
+        user_id = await redis_client.get(f"index:{username}")
+        if not user_id:
             return False
 
-        user_data = json.loads(user_data_str)
-        user_data["is_active"] = False
-        await redis_client.set(f"user:{username}", json.dumps(user_data))
-
+        await redis_client.hset(f"user:{user_id}", "is_active", "0")
         return True
 
 

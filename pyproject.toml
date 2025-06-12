@@ -1,6 +1,6 @@
 [project]
 name = "doan"
-version = "0.1.0"
+dynamic = ["version"]
 authors = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
 maintainers = [{ name = "Lâm Quang Trí", email = "quangtri.lam.9@gmail.com" }]
 description = "Hệ thống hỏi đáp sản phẩm điện tử"
