@@ -5,6 +5,8 @@ Conversation service for managing chat history in Qdrant vector database.
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+import json
+import redis.asyncio as redis
 
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import (
@@ -35,12 +37,15 @@ class ConversationService:
         url: str = config.qdrant_url,
         port: int = config.qdrant_port,
         admin_username: str = config.api_user,
+        redis_url: str = config.redis_url,
     ):
         """Initialize the conversation service."""
         self.client = QdrantClient(url=url, port=port)
         self.conversations_collection = "conversations"
         self.messages_collection = "conversation_messages"
         self.admin_username = admin_username
+        self.redis_client = None
+        self.redis_url = redis_url
         self._ensure_collections()
 
     def _ensure_collections(self) -> None:
@@ -70,7 +75,14 @@ class ConversationService:
             )
             logger.info(f"Created collection: {self.messages_collection}")
 
-    def create_conversation(
+    async def get_redis_client(self) -> redis.Redis:
+        """Get or create Redis client."""
+        if self.redis_client is None:
+            self.redis_client = redis.from_url(self.redis_url, decode_responses=True)
+            logger.info("Redis client initialized for ConversationService")
+        return self.redis_client
+
+    async def create_conversation(
         self,
         user_id: str = None,
         title: Optional[str] = None,
@@ -108,7 +120,7 @@ class ConversationService:
         logger.info(f"Created conversation: {conversation_id}")
         return conversation_id
 
-    def get_conversation(
+    async def get_conversation(
         self,
         conversation_id: str,
         user_id: str,
@@ -155,7 +167,7 @@ class ConversationService:
             logger.error(f"Error getting conversation {conversation_id}: {e}")
             return None
 
-    def list_conversations(
+    async def list_conversations(
         self,
         user_id: str,
         username: str,
@@ -175,65 +187,57 @@ class ConversationService:
                 )
                 return []
 
-            # Always get all conversations and filter in Python for better control
+            # Check Redis cache first
+            redis_client = await self.get_redis_client()
+            cache_key = f"conversations:{user_id}:{limit}:{offset}"
+            cached_conversations = await redis_client.get(cache_key)
+            if cached_conversations:
+                logger.info(f"Cache hit for conversations list: {cache_key}")
+                return json.loads(cached_conversations)
+
+            # Prepare filter for Qdrant query
+            scroll_filter = None
+            if username != self.admin_username:
+                scroll_filter = Filter(
+                    must=[
+                        FieldCondition(key="user_id", match=MatchValue(value=user_id))
+                    ]
+                )
+
+            # Use Qdrant scroll with pagination and filter
+            # Note: Cannot use order_by without a range index, so we retrieve items and sort manually
             result = self.client.scroll(
                 collection_name=self.conversations_collection,
-                limit=1000,  # Get all conversations
+                scroll_filter=scroll_filter,
+                limit=limit + offset,
             )
 
             conversations = []
             if result and result[0]:
                 logger.info(f"Retrieved {len(result[0])} conversations from Qdrant")
-
                 for point in result[0]:
                     conv_data = point.payload
-                    conv_owner = conv_data.get("user_id")
-
-                    logger.debug(
-                        f"Processing conversation {conv_data.get('id')}: owner={conv_owner}, title={conv_data.get('title')}"
-                    )
-
-                    # Filter based on user permissions
-                    if username == self.admin_username:
-                        # Only the specific admin username can see all conversations
-                        logger.debug(
-                            f"Admin access: adding conversation {conv_data.get('id')}"
-                        )
-                        conversations.append(conv_data)
-                    else:
-                        # Regular users only see their own conversations
-                        if conv_data.get("user_id") == user_id:
-                            logger.debug(
-                                f"User access: adding own conversation {conv_data.get('id')}"
-                            )
-                            conversations.append(conv_data)
-                        else:
-                            logger.debug(
-                                f"User access: skipping other user's conversation {conv_data.get('id')} (owner={conv_owner})"
-                            )
+                    conversations.append(conv_data)
+                # Sort by created_at descending manually
+                conversations.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+                # Manually apply offset and limit for pagination
+                conversations = conversations[offset:offset + limit]
 
             logger.info(
-                f"Filtered conversations for user {username} (ID: {user_id}): {len(conversations)} total"
+                f"Returning {len(conversations)} conversations for user {username} (ID: {user_id})"
             )
 
-            # Sort by created_at descending (manual sorting since we can't use order_by with offset)
-            conversations.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            # Cache the result in Redis with TTL of 5 minutes
+            await redis_client.setex(cache_key, 300, json.dumps(conversations))
+            logger.info(f"Cached conversations list: {cache_key}")
 
-            # Apply manual pagination
-            start = offset
-            end = offset + limit
-            final_conversations = conversations[start:end]
-
-            logger.info(
-                f"Returning {len(final_conversations)} conversations after pagination (offset={offset}, limit={limit})"
-            )
-            return final_conversations
+            return conversations
 
         except Exception as e:
             logger.error(f"Error listing conversations for user {username}: {e}")
             return []
 
-    def delete_conversation(
+    async def delete_conversation(
         self,
         conversation_id: str,
         user_id: str,
@@ -242,7 +246,9 @@ class ConversationService:
         """Delete a conversation and all its messages."""
         try:
             # Check if conversation exists and user has permission
-            conversation = self.get_conversation(conversation_id, user_id, username)
+            conversation = await self.get_conversation(
+                conversation_id, user_id, username
+            )
             if not conversation:
                 return False
 
@@ -265,6 +271,19 @@ class ConversationService:
                 points_selector=[conversation_id],
             )
 
+            # Invalidate cache for this conversation
+            redis_client = await self.get_redis_client()
+            keys = await redis_client.keys(f"conversations:{user_id}:*")
+            if keys:
+                await redis_client.delete(*keys)
+                logger.info(f"Invalidated cache for conversations of user {user_id}")
+            keys = await redis_client.keys(f"messages:{conversation_id}:*")
+            if keys:
+                await redis_client.delete(*keys)
+                logger.info(
+                    f"Invalidated cache for messages of conversation {conversation_id}"
+                )
+
             logger.info(f"Deleted conversation: {conversation_id}")
             return True
 
@@ -272,7 +291,7 @@ class ConversationService:
             logger.error(f"Error deleting conversation {conversation_id}: {e}")
             return False
 
-    def add_message(
+    async def add_message(
         self,
         conversation_id: str,
         message: str,
@@ -285,7 +304,9 @@ class ConversationService:
         """Add a message to a conversation."""
         try:
             # Check if conversation exists and user has permission
-            conversation = self.get_conversation(conversation_id, user_id, username)
+            conversation = await self.get_conversation(
+                conversation_id, user_id, username
+            )
             if not conversation:
                 raise ValueError("Conversation not found or access denied")
 
@@ -312,9 +333,38 @@ class ConversationService:
 
             self.client.upsert(collection_name=self.messages_collection, points=[point])
 
-            # Update conversation metadata
-            self._update_conversation_last_updated(conversation_id)
-            self._increment_message_count(conversation_id)
+            # Update conversation metadata in a single operation
+            result = self.client.retrieve(
+                collection_name=self.conversations_collection, ids=[conversation_id]
+            )
+            if result:
+                conversation_data = result[0].payload
+                conversation_data["last_updated"] = now.isoformat()
+                conversation_data["message_count"] = (
+                    conversation_data.get("message_count", 0) + 1
+                )
+
+                update_point = PointStruct(
+                    id=conversation_id, vector=[0.0], payload=conversation_data
+                )
+                self.client.upsert(
+                    collection_name=self.conversations_collection, points=[update_point]
+                )
+
+            # Invalidate cache for this conversation's messages
+            redis_client = await self.get_redis_client()
+            keys = await redis_client.keys(f"messages:{conversation_id}:*")
+            if keys:
+                await redis_client.delete(*keys)
+                logger.info(
+                    f"Invalidated cache for messages of conversation {conversation_id}"
+                )
+
+            # Invalidate cache for user's conversation list
+            keys = await redis_client.keys(f"conversations:{user_id}:*")
+            if keys:
+                await redis_client.delete(*keys)
+                logger.info(f"Invalidated cache for conversations of user {user_id}")
 
             logger.info(f"Added message to conversation {conversation_id}")
             return message_id
@@ -323,22 +373,30 @@ class ConversationService:
             logger.error(f"Error adding message to conversation {conversation_id}: {e}")
             raise
 
-    def get_conversation_messages(
+    async def get_conversation_messages(
         self,
         conversation_id: str,
         user_id: str,
         username: str,
-        limit: int = 100,
+        limit: int = 3,
         offset: int = 0,
     ) -> List[Dict]:
         """Get messages for a conversation."""
         try:
             # Check if conversation exists and user has permission
-            conversation = self.get_conversation(conversation_id, user_id, username)
+            conversation = await self.get_conversation(conversation_id, user_id, username)
             if not conversation:
                 return []
 
-            # Get messages for the conversation
+            # Check Redis cache first
+            redis_client = await self.get_redis_client()
+            cache_key = f"messages:{conversation_id}:{limit}:{offset}"
+            cached_messages = await redis_client.get(cache_key)
+            if cached_messages:
+                logger.info(f"Cache hit for messages: {cache_key}")
+                return json.loads(cached_messages)
+
+            # Get messages for the conversation from Qdrant
             filter_condition = Filter(
                 must=[
                     FieldCondition(
@@ -350,21 +408,23 @@ class ConversationService:
             result = self.client.scroll(
                 collection_name=self.messages_collection,
                 scroll_filter=filter_condition,
-                limit=limit,
+                limit=limit + offset,
             )
 
             messages = []
             if result and result[0]:
                 for point in result[0]:
                     messages.append(point.payload)
+                # Sort by timestamp ascending manually
+                messages.sort(key=lambda x: x.get("timestamp", ""))
+                # Manually apply offset and limit for pagination
+                messages = messages[offset:offset + limit]
 
-            # Sort by timestamp ascending (oldest first)
-            messages.sort(key=lambda x: x.get("timestamp", ""))
+            # Cache the result in Redis with TTL of 5 minutes
+            await redis_client.setex(cache_key, 300, json.dumps(messages))
+            logger.info(f"Cached messages: {cache_key}")
 
-            # Apply manual pagination
-            start = offset
-            end = offset + limit
-            return messages[start:end]
+            return messages
 
         except Exception as e:
             logger.error(
@@ -372,57 +432,20 @@ class ConversationService:
             )
             return []
 
+    # Deprecated methods, replaced by combined update in add_message
     def _update_conversation_last_updated(self, conversation_id: str) -> None:
-        """Update conversation's last_updated timestamp."""
-        try:
-            # Get current conversation
-            result = self.client.retrieve(
-                collection_name=self.conversations_collection, ids=[conversation_id]
-            )
-
-            if result:
-                conversation_data = result[0].payload
-                conversation_data["last_updated"] = datetime.now(
-                    timezone.utc
-                ).isoformat()
-
-                # Update the conversation
-                point = PointStruct(
-                    id=conversation_id, vector=[0.0], payload=conversation_data
-                )
-
-                self.client.upsert(
-                    collection_name=self.conversations_collection, points=[point]
-                )
-
-        except Exception as e:
-            logger.error(f"Error updating conversation {conversation_id}: {e}")
+        """Deprecated: Update conversation's last_updated timestamp."""
+        logger.warning(
+            "_update_conversation_last_updated is deprecated, use combined update in add_message"
+        )
+        pass
 
     def _increment_message_count(self, conversation_id: str) -> None:
-        """Increment message count for a conversation."""
-        try:
-            # Get current conversation
-            result = self.client.retrieve(
-                collection_name=self.conversations_collection, ids=[conversation_id]
-            )
-
-            if result:
-                conversation_data = result[0].payload
-                conversation_data["message_count"] = (
-                    conversation_data.get("message_count", 0) + 1
-                )
-
-                # Update the conversation
-                point = PointStruct(
-                    id=conversation_id, vector=[0.0], payload=conversation_data
-                )
-
-                self.client.upsert(
-                    collection_name=self.conversations_collection, points=[point]
-                )
-
-        except Exception as e:
-            logger.error(f"Error incrementing message count for {conversation_id}: {e}")
+        """Deprecated: Increment message count for a conversation."""
+        logger.warning(
+            "_increment_message_count is deprecated, use combined update in add_message"
+        )
+        pass
 
     def set_admin_username(self, admin_username: str) -> None:
         """Set the admin username."""

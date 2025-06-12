@@ -73,7 +73,7 @@ async def init_conversation_collections():
         logger.info("🔄 Creating conversation collections...")
 
         # Create ConversationService instance (this will create collections automatically)
-        conversation_service = ConversationService()
+        conversation_service = ConversationService(redis_url=config.redis_url)
 
         # Verify collections were created successfully
         from qdrant_client import QdrantClient

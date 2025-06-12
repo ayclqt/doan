@@ -88,7 +88,9 @@ async def get_conversation_service() -> ConversationService:
             logger.info(
                 f"Initializing ConversationService with admin_username: {config.api_user}"
             )
-            _conversation_service = ConversationService(admin_username=config.api_user)
+            _conversation_service = ConversationService(
+                admin_username=config.api_user, redis_url=config.redis_url
+            )
             logger.info("ConversationService initialized successfully")
         else:
             # Update admin_username in case it wasn't set correctly before
@@ -122,15 +124,15 @@ async def get_or_create_conversation(
     conversation_service = await get_conversation_service()
 
     if not conversation_id:
-        conversation_id = conversation_service.create_conversation(user_id=user_id)
+        conversation_id = await conversation_service.create_conversation(user_id=user_id)
     else:
         # Check if conversation exists
-        existing_conversation = conversation_service.get_conversation(
+        existing_conversation = await conversation_service.get_conversation(
             conversation_id, user_id, username
         )
         if not existing_conversation:
             # Create new conversation with the provided ID
-            conversation_id = conversation_service.create_conversation(user_id=user_id)
+            conversation_id = await conversation_service.create_conversation(user_id=user_id)
 
     return conversation_id
 
@@ -148,7 +150,7 @@ async def stream_chat_response(
         conversation_service = await get_conversation_service()
 
         # Get conversation history for context
-        conversation_messages = conversation_service.get_conversation_messages(
+        conversation_messages = await conversation_service.get_conversation_messages(
             conversation_id, user_id, username
         )
         conversation_history = []
@@ -226,7 +228,7 @@ async def stream_chat_response(
         # Save to conversation history using ConversationService
         conversation_service = await get_conversation_service()
         try:
-            conversation_service.add_message(
+            await conversation_service.add_message(
                 conversation_id=conversation_id,
                 message=message,
                 response=full_response,
@@ -311,10 +313,12 @@ class Chat(Controller):
 
             # Get conversation history for context
             conversation_service = await get_conversation_service()
-            conversation_messages = conversation_service.get_conversation_messages(
-                conversation_id,
-                user.id,
-                user.username,
+            conversation_messages = (
+                await conversation_service.get_conversation_messages(
+                    conversation_id,
+                    user.id,
+                    user.username,
+                )
             )
             conversation_history = []
             for msg in conversation_messages:
@@ -380,7 +384,7 @@ class Chat(Controller):
             # Save to conversation history
             conversation_service = await get_conversation_service()
             try:
-                conversation_service.add_message(
+                await conversation_service.add_message(
                     conversation_id=conversation_id,
                     message=data.message,
                     response=response,
@@ -421,13 +425,13 @@ class Chat(Controller):
             user: User = request.user
             conversation_service = await get_conversation_service()
 
-            conversation_id = conversation_service.create_conversation(
+            conversation_id = await conversation_service.create_conversation(
                 user_id=user.id,
                 title=data.title,
                 description=data.description,
             )
 
-            conv = conversation_service.get_conversation(
+            conv = await conversation_service.get_conversation(
                 conversation_id, user.id, user.username
             )
 
@@ -456,7 +460,7 @@ class Chat(Controller):
             user: User = request.user
             conversation_service = await get_conversation_service()
 
-            conversations_data = conversation_service.list_conversations(
+            conversations_data = await conversation_service.list_conversations(
                 user_id=user.id,
                 username=user.username,
                 limit=limit,
@@ -494,7 +498,7 @@ class Chat(Controller):
             conversation_service = await get_conversation_service()
 
             # Get conversation metadata
-            conversation = conversation_service.get_conversation(
+            conversation = await conversation_service.get_conversation(
                 conversation_id,
                 user.id,
                 user.username,
@@ -505,10 +509,11 @@ class Chat(Controller):
                 )
 
             # Get conversation messages
-            messages_data = conversation_service.get_conversation_messages(
+            messages_data = await conversation_service.get_conversation_messages(
                 conversation_id,
                 user.id,
                 user.username,
+                limit=100,  # Override default limit for full history
             )
 
             # Convert messages to ConversationHistory objects
@@ -551,7 +556,7 @@ class Chat(Controller):
             user: User = request.user
             conversation_service = await get_conversation_service()
 
-            success = conversation_service.delete_conversation(
+            success = await conversation_service.delete_conversation(
                 conversation_id,
                 user.id,
                 user.username,
@@ -756,7 +761,7 @@ class Chat(Controller):
                     status_code=HTTP_400_BAD_REQUEST, detail="Title cannot be empty"
                 )
 
-            success = conversation_service.update_conversation_title(
+            success = await conversation_service.update_conversation_title(
                 conversation_id,
                 title,
                 user.id,

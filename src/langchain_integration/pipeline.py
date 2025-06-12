@@ -320,10 +320,10 @@ class LangchainPipeline:
         """Enhance the question with conversation history context."""
         if not conversation_history or len(conversation_history) == 0:
             return question
-        # Build context from recent conversation history (last 3 messages)
+        # Build context from recent conversation history (last 2 messages for better performance)
         recent_history = (
-            conversation_history[-3:]
-            if len(conversation_history) > 3
+            conversation_history[-2:]
+            if len(conversation_history) > 2
             else conversation_history
         )
         context_parts = []
