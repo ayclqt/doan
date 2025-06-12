@@ -1,15 +1,3 @@
-"""
-LLM-driven search decision system for intelligent query routing and search strategy.
-
-This module implements an agent-based approach where the LLM makes decisions about:
-1. Whether to perform web search
-2. What search queries to use
-3. How to combine multiple search results
-4. When to perform follow-up searches
-
-Author: Assistant
-"""
-
 import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,9 +9,12 @@ from langchain_openai import ChatOpenAI
 from ..config import config, logger
 from .web_search import SearchResult, WebSearcher
 
-__author__ = "Assistant"
-__copyright__ = "Copyright 2025"
-__maintainer__ = "Assistant"
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
 __status__ = "Development"
 
 

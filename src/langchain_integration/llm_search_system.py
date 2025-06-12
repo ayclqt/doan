@@ -1,16 +1,3 @@
-"""
-Complete LLM-driven search decision system with caching, fallback, and optimization.
-
-This module replaces the rule-based search system with an intelligent LLM agent that:
-1. Makes contextual search decisions
-2. Generates optimized search queries
-3. Caches decisions for performance
-4. Provides fallback mechanisms
-5. Optimizes costs through smart batching
-
-Author: Assistant
-"""
-
 import asyncio
 import hashlib
 import json
@@ -25,10 +12,13 @@ from langchain_openai import ChatOpenAI
 from ..config import config, logger
 from .web_search import SearchResult, WebSearcher
 
-__author__ = "Assistant"
-__copyright__ = "Copyright 2025"
-__maintainer__ = "Assistant"
-__status__ = "Production"
+__author__ = "Lâm Quang Trí"
+__copyright__ = "Copyright 2025, Lâm Quang Trí"
+__credits__ = ["Lâm Quang Trí"]
+
+__maintainer__ = "Lâm Quang Trí"
+__email__ = "quangtri.lam.9@gmail.com"
+__status__ = "Development"
 
 
 @dataclass

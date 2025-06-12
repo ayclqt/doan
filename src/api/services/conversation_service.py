@@ -221,7 +221,7 @@ class ConversationService:
                 # Sort by created_at descending manually
                 conversations.sort(key=lambda x: x.get("created_at", ""), reverse=True)
                 # Manually apply offset and limit for pagination
-                conversations = conversations[offset:offset + limit]
+                conversations = conversations[offset : offset + limit]
 
             logger.info(
                 f"Returning {len(conversations)} conversations for user {username} (ID: {user_id})"
@@ -384,7 +384,9 @@ class ConversationService:
         """Get messages for a conversation."""
         try:
             # Check if conversation exists and user has permission
-            conversation = await self.get_conversation(conversation_id, user_id, username)
+            conversation = await self.get_conversation(
+                conversation_id, user_id, username
+            )
             if not conversation:
                 return []
 
@@ -418,7 +420,7 @@ class ConversationService:
                 # Sort by timestamp ascending manually
                 messages.sort(key=lambda x: x.get("timestamp", ""))
                 # Manually apply offset and limit for pagination
-                messages = messages[offset:offset + limit]
+                messages = messages[offset : offset + limit]
 
             # Cache the result in Redis with TTL of 5 minutes
             await redis_client.setex(cache_key, 300, json.dumps(messages))

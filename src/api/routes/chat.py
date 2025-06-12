@@ -124,7 +124,9 @@ async def get_or_create_conversation(
     conversation_service = await get_conversation_service()
 
     if not conversation_id:
-        conversation_id = await conversation_service.create_conversation(user_id=user_id)
+        conversation_id = await conversation_service.create_conversation(
+            user_id=user_id
+        )
     else:
         # Check if conversation exists
         existing_conversation = await conversation_service.get_conversation(
@@ -132,7 +134,9 @@ async def get_or_create_conversation(
         )
         if not existing_conversation:
             # Create new conversation with the provided ID
-            conversation_id = await conversation_service.create_conversation(user_id=user_id)
+            conversation_id = await conversation_service.create_conversation(
+                user_id=user_id
+            )
 
     return conversation_id
 

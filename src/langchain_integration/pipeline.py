@@ -15,8 +15,7 @@ from langchain_openai import ChatOpenAI
 from ..config import config, logger
 from .vectorstore import VectorStore
 from .web_search import HybridSearcher, WebSearcher
-from .llm_search_system import LLMSearchSystem
-from .agent_system import ProductAssistantAgent
+from .product_introduction_agent import get_product_introduction_agent
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -71,28 +70,15 @@ class LangchainPipeline:
             else None
         )
 
-        # Initialize LLM search system
-        self.use_llm_search_system = (
-            use_llm_search_system and self.enable_web_search and not use_agent_system
-        )
-        self.llm_search_system = (
-            LLMSearchSystem(
-                model_name=model_name,
-                web_searcher=self.web_searcher,
-                cache_enabled=True,
-                fallback_enabled=True,
-            )
-            if self.use_llm_search_system
-            else None
+        # Initialize Product Introduction Agent (new system)
+        self.use_agent_system = use_agent_system
+        self.agent_system = (
+            get_product_introduction_agent() if self.use_agent_system else None
         )
 
-        # Initialize Agent system (replaces LLM search system when enabled)
-        self.use_agent_system = use_agent_system and self.enable_web_search
-        self.agent_system = (
-            ProductAssistantAgent(model_name=model_name, temperature=0.3, verbose=False)
-            if self.use_agent_system
-            else None
-        )
+        # Legacy systems disabled - only using ProductIntroductionAgent
+        self.use_llm_search_system = False
+        self.llm_search_system = None
 
         # Set up the pipeline
         self.pipeline = self._create_pipeline()
@@ -143,7 +129,7 @@ class LangchainPipeline:
             # Get conversation history for context
             conversation_history = getattr(self, "_current_conversation_history", None)
 
-            # Use Agent system if available (highest priority)
+            # Use ProductIntroductionAgent if available (new system)
             if self.use_agent_system and self.agent_system:
                 try:
                     agent_result = self.agent_system.process_query(
@@ -151,57 +137,22 @@ class LangchainPipeline:
                     )
 
                     if agent_result["success"]:
-                        # Log agent tool usage
-                        tools_used = [
-                            tool["tool"] for tool in agent_result["tools_used"]
-                        ]
                         self.logger.info(
-                            f"Agent used tools: {tools_used} (time: {agent_result['processing_time']:.2f}s)"
+                            f"ProductIntroductionAgent completed in {agent_result['processing_time']:.2f}s"
                         )
-
-                        # Return agent response
+                        # Return agent response directly - agent handles all logic internally
                         return agent_result["response"]
                     else:
                         self.logger.warning(
-                            f"Agent failed: {agent_result.get('error', 'Unknown error')}"
+                            f"ProductIntroductionAgent failed: {agent_result.get('error', 'Unknown error')}"
                         )
-                        # Fall through to LLM search system or rules
-
-                except Exception as e:
-                    self.logger.warning(f"Agent system failed, falling back: {e}")
-                    # Fall through to LLM search system or rules
-
-            # Use LLM search system if available (fallback from agent)
-            elif self.use_llm_search_system and self.llm_search_system:
-                try:
-                    web_results, search_decision = (
-                        self.llm_search_system.execute_complete_search(
-                            original_question, vector_docs, conversation_history
-                        )
-                    )
-
-                    # Log LLM decision details
-                    self.logger.info(
-                        f"LLM search decision: {search_decision.reasoning} (confidence: {search_decision.confidence:.2f})"
-                    )
-
-                    if web_results and search_decision.should_search:
-                        # Use LLM system's results
-                        formatted_web_results = self.web_searcher.format_search_results(
-                            web_results
-                        )
-                        if vector_context and vector_context.strip():
-                            return f"{vector_context}\n\n{formatted_web_results}"
-                        return formatted_web_results
-
-                    # LLM decided not to search, use vector results only
-                    return vector_context
+                        # Fall through to fallback logic
 
                 except Exception as e:
                     self.logger.warning(
-                        f"LLM search system failed, falling back to rule-based: {e}"
+                        f"ProductIntroductionAgent failed, falling back: {e}"
                     )
-                    # Fall through to rule-based logic
+                    # Fall through to fallback logic
 
             # Fallback to simplified rule-based logic (only when LLM system fails)
             should_search = (
@@ -440,7 +391,7 @@ Lưu ý: Khi người dùng nói "điện thoại trên", "sản phẩm trên", 
                 "agent_system_enabled": self.use_agent_system,
             }
 
-            # Get Agent system info if available
+            # Get ProductIntroductionAgent info if available
             if self.use_agent_system and self.agent_system:
                 conversation_history = getattr(
                     self, "_current_conversation_history", None
@@ -451,53 +402,16 @@ Lưu ý: Khi người dùng nói "điện thoại trên", "sản phẩm trên", 
 
                 info.update(
                     {
-                        "agent_decision": {
+                        "product_introduction_agent": {
                             "success": agent_result["success"],
-                            "tools_used": [
-                                tool["tool"] for tool in agent_result["tools_used"]
-                            ],
                             "processing_time": agent_result["processing_time"],
-                            "agent_reasoning": agent_result.get("agent_reasoning", []),
+                            "query_type": agent_result.get("query_type", "unknown"),
                         },
                         "agent_stats": self.agent_system.get_stats(),
                     }
                 )
 
-            # Get LLM search system decision if available (fallback)
-            elif self.use_llm_search_system and self.llm_search_system:
-                conversation_history = getattr(
-                    self, "_current_conversation_history", None
-                )
-                search_decision = self.llm_search_system.decide_search_strategy(
-                    question, vector_docs, conversation_history
-                )
-
-                info.update(
-                    {
-                        "llm_decision": {
-                            "should_search": search_decision.should_search,
-                            "reasoning": search_decision.reasoning,
-                            "confidence": search_decision.confidence,
-                            "search_type": search_decision.search_type,
-                            "urgency": search_decision.urgency,
-                        },
-                        "system_stats": self.llm_search_system.get_system_stats(),
-                    }
-                )
-
-                if search_decision.should_search:
-                    query_result = self.llm_search_system.generate_search_queries(
-                        question,
-                        search_decision.expected_info_types,
-                        conversation_history,
-                    )
-                    info["generated_queries"] = {
-                        "primary": query_result.primary_query,
-                        "alternatives": query_result.alternative_queries,
-                        "reasoning": query_result.query_reasoning,
-                    }
-
-            # Fallback info for rule-based logic
+            # Fallback info for rule-based logic when agent is disabled
             elif self.hybrid_searcher:
                 should_use_web = self.hybrid_searcher.should_use_web_search(
                     vector_docs, question
@@ -531,19 +445,9 @@ Lưu ý: Khi người dùng nói "điện thoại trên", "sản phẩm trên", 
             self.enable_web_search = True
             self.hybrid_searcher = HybridSearcher(self.web_searcher)
 
-            # Initialize or recreate LLM search system
-            if self.use_llm_search_system:
-                self.llm_search_system = LLMSearchSystem(
-                    web_searcher=self.web_searcher,
-                    cache_enabled=True,
-                    fallback_enabled=True,
-                )
-
-            # Initialize or recreate Agent system
+            # Recreate ProductIntroductionAgent with updated settings
             if self.use_agent_system:
-                self.agent_system = ProductAssistantAgent(
-                    temperature=0.3, verbose=False
-                )
+                self.agent_system = get_product_introduction_agent()
 
             # Recreate pipeline with new settings
             self.pipeline = self._create_pipeline()
