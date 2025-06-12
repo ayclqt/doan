@@ -30,6 +30,7 @@ WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
+EXPOSE 8501
 
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT ["litestar","run"]
