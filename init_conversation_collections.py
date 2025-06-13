@@ -27,7 +27,12 @@ sys.path.insert(0, str(project_root))
 async def check_conversation_collections_exist():
     """Check if conversation collections already exist"""
     try:
-        client = QdrantClient(url=config.qdrant_url, port=config.qdrant_port)
+        client = QdrantClient(
+            url=config.qdrant_url, 
+            port=config.qdrant_port,
+            grpc_port=config.qdrant_port,
+            prefer_grpc=True
+        )
         collections = client.get_collections()
         collection_names = [collection.name for collection in collections.collections]
 
@@ -78,7 +83,12 @@ async def init_conversation_collections():
         # Verify collections were created successfully
         from qdrant_client import QdrantClient
 
-        client = QdrantClient(url=config.qdrant_url, port=config.qdrant_port)
+        client = QdrantClient(
+            url=config.qdrant_url, 
+            port=config.qdrant_port,
+            grpc_port=config.qdrant_port,
+            prefer_grpc=True
+        )
         collections = client.get_collections()
         collection_names = [collection.name for collection in collections.collections]
 
@@ -107,11 +117,16 @@ async def init_conversation_collections():
 async def check_qdrant_connection():
     """Check if Qdrant is available"""
     try:
-        client = QdrantClient(url=config.qdrant_url, port=config.qdrant_port)
+        client = QdrantClient(
+            url=config.qdrant_url, 
+            port=config.qdrant_port,
+            grpc_port=config.qdrant_port,
+            prefer_grpc=True
+        )
         collections = client.get_collections()
 
         logger.info(
-            "✅ Qdrant connection successful",
+            "✅ Qdrant gRPC connection successful",
             numbers=len(collections.collections),
             collections=[collection.name for collection in collections.collections],
         )
@@ -119,7 +134,7 @@ async def check_qdrant_connection():
         return True
     except Exception as e:
         logger.error(
-            "❌ Qdrant connection failed! Please make sure Qdrant is running and accessible!",
+            "❌ Qdrant gRPC connection failed! Please make sure Qdrant is running with gRPC support!",
             host=config.qdrant_url,
             port=config.qdrant_port,
             error=str(e),

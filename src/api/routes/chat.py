@@ -2,6 +2,7 @@
 Chat routes cho chatbot interactions với streaming support.
 """
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
@@ -229,22 +230,7 @@ async def stream_chat_response(
             except Exception as e:
                 logger.warning(f"Could not get search info: {e}")
 
-        # Save to conversation history using ConversationService
-        conversation_service = await get_conversation_service()
-        try:
-            await conversation_service.add_message(
-                conversation_id=conversation_id,
-                message=message,
-                response=full_response,
-                user_id=user_id,
-                username=username,
-                response_time=0.0,
-                search_info=search_info,
-            )
-        except Exception as e:
-            logger.warning(f"Failed to save streaming message to conversation: {e}")
-
-        # Send end event with metadata
+        # Send end event with metadata IMMEDIATELY
         end_chunk = ChatStreamChunk(
             type="end",
             content="",
@@ -256,6 +242,26 @@ async def stream_chat_response(
             },
         )
         yield f"data: {json.dumps(struct_to_dict(end_chunk))}\n\n"
+
+        # Save to conversation history in background (non-blocking)
+        async def save_message_background():
+            try:
+                conversation_service = await get_conversation_service()
+                await conversation_service.add_message(
+                    conversation_id=conversation_id,
+                    message=message,
+                    response=full_response,
+                    user_id=user_id,
+                    username=username,
+                    response_time=0.0,
+                    search_info=search_info,
+                )
+                logger.debug(f"Message saved to conversation {conversation_id}")
+            except Exception as e:
+                logger.warning(f"Failed to save streaming message to conversation: {e}")
+
+        # Start background task for saving
+        asyncio.create_task(save_message_background())
 
     except Exception as e:
         logger.error(f"Error in stream_chat_response: {e}")

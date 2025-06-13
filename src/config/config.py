@@ -21,7 +21,7 @@ class Config(BaseSettings):
     openai_base_url: str = "https://api.x.ai/v1"
 
     qdrant_url: str = "localhost"
-    qdrant_port: int = 6333
+    qdrant_port: int = 6334  # gRPC API port (only protocol supported)
     qdrant_collection_name: str = "product_data"
 
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"

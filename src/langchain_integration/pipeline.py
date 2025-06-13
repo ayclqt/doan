@@ -129,8 +129,13 @@ class LangchainPipeline:
             # Get conversation history for context
             conversation_history = getattr(self, "_current_conversation_history", None)
 
-            # Use ProductIntroductionAgent if available (new system)
-            if self.use_agent_system and self.agent_system:
+            # Use ProductIntroductionAgent if available (new system) - ONLY for non-streaming
+            # Streaming requests should use answer_question_stream() directly
+            if (
+                self.use_agent_system
+                and self.agent_system
+                and not getattr(self, "_streaming_mode", False)
+            ):
                 try:
                     agent_result = self.agent_system.process_query(
                         original_question, conversation_history
@@ -247,23 +252,42 @@ class LangchainPipeline:
         try:
             # Store conversation history for web search access
             self._current_conversation_history = conversation_history
-            # Include conversation history in the question context
+            # Set streaming mode flag to prevent agent double-call
+            self._streaming_mode = True
+
+            # Use agent streaming if available
+            if self.use_agent_system and self.agent_system:
+                try:
+                    # Stream using ProductIntroductionAgent
+                    for chunk in self.agent_system.process_query_stream(
+                        question, conversation_history
+                    ):
+                        yield chunk
+                    return
+                except Exception as e:
+                    self.logger.warning(
+                        f"Agent streaming failed, fallback to pipeline: {e}"
+                    )
+                    # Fall through to regular pipeline streaming
+
+            # Fallback to regular pipeline streaming
             enhanced_question = self._enhance_question_with_history(
                 question, conversation_history
             )
-            # Create input with both original and enhanced questions
             pipeline_input = {
                 "question": enhanced_question,
                 "original_question": question,
             }
             for chunk in self.pipeline.stream(pipeline_input):
                 yield chunk
+
         except Exception as e:
             self.logger.error("Error streaming answer", error=e)
             yield "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi của bạn."
         finally:
             # Clean up temporary storage
             self._current_conversation_history = None
+            self._streaming_mode = False
 
     def _enhance_question_with_history(
         self, question: str, conversation_history: Optional[List[dict]] = None

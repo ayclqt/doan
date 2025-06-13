@@ -31,16 +31,65 @@ class VectorStore:
         port: int = config.qdrant_port,
         embedding_model: str = config.embedding_model_name,
     ):
-        """Initialize the vector database connection."""
+        """Initialize the vector database connection with gRPC."""
         self.collection_name = collection_name
         self.embedding_model = HuggingFaceEmbeddings(model_name=embedding_model)
+        self.url = url
+        self.port = port
 
-        # Create Qdrant client
-        self.client = QdrantClient(url=url, port=port)
+        # Create Qdrant client with gRPC
+        self.client = self._create_qdrant_client()
         # self.client = QdrantClient(":memory:")
 
         # Initialize Langchain's Qdrant wrapper
         self.vectorstore = None
+
+    def _create_qdrant_client(self) -> QdrantClient:
+        """Create Qdrant client with gRPC connection only."""
+        try:
+            # Create gRPC client with optimized settings
+            client = QdrantClient(
+                url=self.url,
+                port=self.port,
+                grpc_port=self.port,
+                prefer_grpc=True,
+                timeout=10.0
+            )
+            
+            # Test the connection
+            client.get_collections()
+            logger.info(
+                f"Connected to Qdrant via gRPC",
+                url=self.url,
+                port=self.port
+            )
+            return client
+            
+        except Exception as error:
+            logger.error(
+                f"gRPC connection failed",
+                url=self.url,
+                port=self.port,
+                error=str(error)
+            )
+            raise ConnectionError(f"Unable to connect to Qdrant via gRPC: {error}")
+
+    def get_connection_info(self) -> Dict[str, Any]:
+        """Get current connection information."""
+        try:
+            collections = self.client.get_collections()
+            is_connected = True
+        except Exception:
+            is_connected = False
+            
+        return {
+            "connected": is_connected,
+            "url": self.url,
+            "port": self.port,
+            "protocol": "gRPC",
+            "collection_name": self.collection_name,
+            "collections_count": len(collections.collections) if is_connected else 0
+        }
 
     def create_collection(self, vector_size: int = 1024) -> None:
         """Create a new collection if it doesn't exist."""

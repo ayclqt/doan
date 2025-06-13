@@ -4,13 +4,14 @@ Uses pure LLM reasoning with optimized tools for natural product introductions.
 """
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.prompts import ChatPromptTemplate
 from langchain.tools import tool
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_openai import ChatOpenAI
 from langchain_community.tools import DuckDuckGoSearchRun
 
@@ -224,6 +225,40 @@ def conversation_context_tool(reference: str, conversation_history: List[dict]) 
         return f"Lỗi khi resolve reference: {e}"
 
 
+class StreamingCallbackHandler(BaseCallbackHandler):
+    """Custom callback handler for streaming agent execution."""
+
+    def __init__(self, stream_callback):
+        super().__init__()
+        self.stream_callback = stream_callback
+
+    def on_tool_start(self, serialized, input_str, **kwargs):
+        """Called when a tool starts execution."""
+        tool_name = serialized.get("name", "tool")
+        if tool_name == "product_search":
+            self.stream_callback("🔍 Đang tìm kiếm trong cơ sở dữ liệu sản phẩm...")
+        elif tool_name == "web_knowledge":
+            self.stream_callback("🌐 Đang tìm thông tin bổ sung trên web...")
+        elif tool_name == "conversation_context":
+            self.stream_callback("💭 Đang hiểu ngữ cảnh cuộc trò chuyện...")
+        else:
+            self.stream_callback(f"🔧 Đang sử dụng công cụ {tool_name}...")
+
+    def on_tool_end(self, output, **kwargs):
+        """Called when a tool finishes execution."""
+        self.stream_callback("✅ Hoàn thành tìm kiếm thông tin...")
+
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        """Called when LLM starts generating."""
+        self.stream_callback("🤖 Đang phân tích và tạo phản hồi...")
+
+    def on_llm_new_token(self, token: str, **kwargs):
+        """Called when LLM generates a new token."""
+        # Stream individual tokens if available
+        if token and token.strip():
+            self.stream_callback(token)
+
+
 class ProductIntroductionAgent:
     """
     Intelligent Product Introduction Agent using pure LLM reasoning.
@@ -245,6 +280,7 @@ class ProductIntroductionAgent:
             temperature=temperature,
             api_key=config.openai_api_key,
             base_url=config.openai_base_url,
+            streaming=True,  # Enable streaming for LLM
         )
 
         # Define available tools - simplified but powerful
@@ -317,14 +353,55 @@ QUY TẮC NGHIÊM NGẶT - KHÔNG BAO GIỜ VI PHẠM:
 ✅ Giữ tone thân thiện, chuyên nghiệp và tự tin
 ✅ Kết thúc bằng lời khuyên cụ thể phù hợp với nhu cầu
 
-CÁCH TRÌNH BÀY:
-- Bắt đầu với điểm nổi bật của sản phẩm
-- Phân tích ưu nhược điểm một cách khách quan
-- Đưa ra recommendation phù hợp với nhu cầu người dùng
-- Kết thúc bằng tóm tắt và lời khuyên thực tế
+ĐỊNH DẠNG MARKDOWN BẮT BUỘC:
+- LUÔN sử dụng ## cho headers chính (ví dụ: ## Điểm nổi bật chính)
+- Sử dụng ### cho sub-headers (ví dụ: ### Hiệu năng và thiết kế)
+- Sử dụng **text** cho highlight quan trọng
+- Sử dụng - cho bullet points
+- Sử dụng 1. 2. 3. cho numbered lists
+- LUÔN có ít nhất 2 empty lines giữa các sections chính
+- Kết thúc mỗi section với 1 empty line
 
-VÍ DỤ PHONG CÁCH PHẢN HỒI:
-"iPhone 15 Pro thực sự là một chiếc điện thoại ấn tượng với chip A17 Pro mạnh mẽ và hệ thống camera tiên tiến. Với thiết kế titanium cao cấp, máy vừa nhẹ vừa bền bỉ. Camera chính 48MP cho chất lượng ảnh xuất sắc, đặc biệt trong điều kiện thiếu sáng. Tuy nhiên, giá thành khá cao so với các đối thủ. Nếu bạn đang tìm một chiếc flagship Android với hiệu năng tương đương nhưng giá tốt hơn, Samsung Galaxy S24 Ultra có thể là lựa chọn phù hợp."
+CÁCH TRÌNH BÀY:
+## Tổng quan sản phẩm
+(Điểm nổi bật chính)
+
+
+### Hiệu năng và thiết kế
+- Point 1
+- Point 2
+
+
+### So sánh với đối thủ
+1. Ưu điểm
+2. Nhược điểm
+
+
+## Khuyến nghị
+(Lời khuyên cuối cùng)
+
+VÍ DỤ ĐỊNH DẠNG:
+## Tổng quan iPhone 15 Pro
+
+iPhone 15 Pro thực sự là một chiếc điện thoại ấn tượng với **chip A17 Pro mạnh mẽ** và hệ thống camera tiên tiến.
+
+
+### Điểm mạnh nổi bật
+
+- **Hiệu năng**: Chip A17 Pro với GPU 6 nhân
+- **Camera**: Hệ thống 48MP với zoom quang học
+- **Thiết kế**: Khung titanium cao cấp, nhẹ và bền
+
+
+### So sánh với Android flagship
+
+1. **Ưu điểm**: Hệ sinh thái Apple, camera xuất sắc
+2. **Nhược điểm**: Giá cao, ít tùy chỉnh
+
+
+## Khuyến nghị
+
+Nếu bạn đang tìm flagship Android với giá tốt hơn, **Samsung Galaxy S24 Ultra** có thể là lựa chọn phù hợp.
 
 Hãy luôn nhớ: Bạn là CHUYÊN GIA SẢN PHẨM, không phải công cụ tìm kiếm!"""
 
@@ -397,6 +474,107 @@ Hãy luôn nhớ: Bạn là CHUYÊN GIA SẢN PHẨM, không phải công cụ t
                 "success": False,
                 "error": str(e),
             }
+
+    def process_query_stream(
+        self, query: str, conversation_history: Optional[List[dict]] = None
+    ) -> Iterator[str]:
+        """
+        Stream agent processing with real-time updates.
+
+        Args:
+            query: User query about products
+            conversation_history: Previous conversation messages
+
+        Yields:
+            Progressive response chunks from LLM only
+        """
+        start_time = time.time()
+        self.stats["total_queries"] += 1
+
+        try:
+            # Prepare agent input
+            agent_input = {
+                "input": query,
+                "chat_history": self._format_chat_history(conversation_history or []),
+                "conversation_history": conversation_history or [],
+            }
+
+            # Execute agent with streaming callback
+            result = self._execute_agent_with_streaming(agent_input)
+
+            if result["success"]:
+                # Stream the final response naturally
+                response_text = result["response"]
+                yield from self._stream_text_naturally(response_text)
+
+                self.stats["successful_introductions"] += 1
+
+                processing_time = time.time() - start_time
+                self.logger.info(f"Streaming agent completed in {processing_time:.2f}s")
+            else:
+                yield result.get("error", "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi.")
+
+        except Exception as e:
+            self.logger.error(f"Agent streaming failed: {e}")
+            yield "Xin lỗi, đã xảy ra lỗi khi xử lý câu hỏi về sản phẩm."
+
+    def _execute_agent_with_streaming(self, agent_input: dict) -> dict:
+        """Execute agent with streaming progress updates."""
+        try:
+            # For now, execute normally and return result
+            # In future, we can implement streaming callbacks
+            result = self.agent_executor.invoke(agent_input)
+
+            return {
+                "response": result["output"],
+                "success": True,
+            }
+
+        except Exception as e:
+            return {
+                "response": "",
+                "success": False,
+                "error": str(e),
+            }
+
+    def _stream_text_naturally(self, text: str, chunk_size: int = 15) -> Iterator[str]:
+        """Stream text naturally word by word with appropriate delays, preserving line breaks."""
+        import re
+
+        # Split text into tokens (words + whitespace/newlines) while preserving structure
+        tokens = re.findall(r"\S+|\s+", text)
+        current_chunk = []
+        word_count = 0
+
+        for token in tokens:
+            current_chunk.append(token)
+
+            # Count only words (non-whitespace tokens)
+            if token.strip():
+                word_count += 1
+
+            # Send chunk when word limit reached or at sentence/phrase end
+            if word_count >= chunk_size or (
+                token.strip()
+                and (
+                    token.endswith(".")
+                    or token.endswith("!")
+                    or token.endswith("?")
+                    or token.endswith(",")
+                    or token.endswith(";")
+                )
+            ):
+                chunk_text = "".join(current_chunk)
+                yield chunk_text
+                current_chunk = []
+                word_count = 0
+
+                # Natural streaming delay
+                time.sleep(0.08)
+
+        # Send remaining tokens
+        if current_chunk:
+            yield "".join(current_chunk)
 
     def _format_chat_history(
         self, conversation_history: List[dict]
