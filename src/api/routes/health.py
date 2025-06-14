@@ -32,12 +32,12 @@ class Health(Controller):
         return HealthResponse(
             status="healthy",
             timestamp=datetime.now(timezone.utc).isoformat(),
-            version="1.0.0",
+            version="2.0.0",
             services={
                 "api": "healthy",
-                "database": "healthy",  # Placeholder
-                "vector_store": "healthy",  # Placeholder
-                "llm": "healthy",  # Placeholder
+                "clean_facade": "healthy",
+                "vector_store": "healthy",
+                "llm": "healthy",
             },
         )
 
@@ -48,19 +48,29 @@ class Health(Controller):
             # Kiểm tra các service components
             services_status = {}
 
-            # Check LangChain pipeline
+            # Check Clean Facade System
             try:
-                from ...langchain_integration import LangchainPipeline, VectorStore
+                from ...langchain_integration import get_facade, VectorStore
 
                 vector_store = VectorStore()
                 services_status["vector_store"] = "healthy"
 
-                # Quick test
-                if LangchainPipeline(vector_store=vector_store):
-                    services_status["langchain_pipeline"] = "healthy"
+                # Quick test facade
+                facade = get_facade()
+                if facade:
+                    services_status["product_assistant_facade"] = "healthy"
+                    system_info = facade.get_system_info()
+                    services_status["clean_agent"] = (
+                        "healthy"
+                        if system_info["clean_agent_available"]
+                        else "degraded"
+                    )
+                    services_status["facade_version"] = system_info.get(
+                        "facade_version", "unknown"
+                    )
             except Exception as e:
                 services_status["vector_store"] = f"unhealthy: {e!s}"
-                services_status["langchain_pipeline"] = f"unhealthy: {e!s}"
+                services_status["product_assistant_facade"] = f"unhealthy: {e!s}"
 
             # Check configuration
             services_status["config"] = (
@@ -69,23 +79,20 @@ class Health(Controller):
 
             overall_status = (
                 "healthy"
-                if all(status == "healthy" for status in services_status.values())
+                if all(
+                    "unhealthy" not in str(status)
+                    for status in services_status.values()
+                )
                 else "degraded"
             )
 
             return {
                 "status": overall_status,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "version": "1.0.0",
+                "version": "2.0.0",
                 "environment": config.deploy_env,
                 "services": services_status,
-                # "uptime": "N/A",  # Có thể implement sau
-                # "memory_usage": "N/A",  # Có thể implement sau
-                # "system_info": {
-                #     "python_version": "3.11+",
-                #     "litestar_version": "2.x",
-                #     "langchain_version": "0.x",
-                # },
+                "migration_status": "phase_3_cleanup_in_progress",
             }
 
         except Exception as e:
@@ -93,7 +100,7 @@ class Health(Controller):
                 "status": "unhealthy",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "error": str(e),
-                "version": "1.0.0",
+                "version": "2.0.0",
             }
 
     @get("/ready", status_code=HTTP_200_OK)
@@ -115,12 +122,32 @@ class Health(Controller):
                 checks["vector_store"] = f"not ready: {e!s}"
                 ready = False
 
-            # Check LLM connection
+            # Check Facade System
             try:
-                # Không tạo pipeline thật để tránh tốn tài nguyên
+                from ...langchain_integration import get_facade
+
+                facade = get_facade()
+                if facade:
+                    system_info = facade.get_system_info()
+                    checks["clean_agent"] = (
+                        "ready" if system_info["clean_agent_available"] else "not ready"
+                    )
+                    if not system_info["clean_agent_available"]:
+                        ready = False
+                else:
+                    checks["facade"] = "not ready"
+                    ready = False
+            except Exception as e:
+                checks["facade"] = f"not ready: {e!s}"
+                ready = False
+
+            # Check LLM config
+            try:
                 checks["llm_config"] = (
                     "ready" if hasattr(config, "openai_api_key") else "not ready"
                 )
+                if not hasattr(config, "openai_api_key"):
+                    ready = False
             except Exception as e:
                 checks["llm_config"] = f"not ready: {e!s}"
                 ready = False

@@ -1,8 +1,10 @@
 import secrets
+import re
 
 import structlog
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+from pydantic import validator
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -58,6 +60,44 @@ class Config(BaseSettings):
     cors_allowed_origins: str = "*"
 
     deploy_env: str = "dev"
+
+    # Shop settings
+    shop_name: str = "TechStore Pro"
+    shop_phone: str = "0901234567"
+    shop_email: str = "contact@techstore.vn"
+
+    @validator("shop_phone")
+    def validate_shop_phone(cls, v):
+        """Validate Vietnamese phone number format"""
+        if not v:
+            return v
+
+        # Remove spaces and special characters
+        phone_clean = re.sub(r"[\s\-\(\)]", "", v)
+
+        # Vietnamese phone patterns
+        patterns = [
+            r"^(0[3|5|7|8|9])\d{8}$",  # Mobile: 03x, 05x, 07x, 08x, 09x + 8 digits
+            r"^(84[3|5|7|8|9])\d{8}$",  # International: 84 + mobile
+            r"^(\+84[3|5|7|8|9])\d{8}$",  # +84 format
+        ]
+
+        if not any(re.match(pattern, phone_clean) for pattern in patterns):
+            raise ValueError("Shop phone number must be valid Vietnamese phone number")
+
+        return v
+
+    @validator("shop_email")
+    def validate_shop_email(cls, v):
+        """Validate email format"""
+        if not v:
+            return v
+
+        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        if not re.match(email_pattern, v):
+            raise ValueError("Shop email must be valid email format")
+
+        return v
 
 
 load_dotenv()

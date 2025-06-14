@@ -53,24 +53,20 @@ class VectorStore:
                 port=self.port,
                 grpc_port=self.port,
                 prefer_grpc=True,
-                timeout=10.0
+                timeout=10.0,
             )
-            
+
             # Test the connection
             client.get_collections()
-            logger.info(
-                f"Connected to Qdrant via gRPC",
-                url=self.url,
-                port=self.port
-            )
+            logger.info("Connected to Qdrant via gRPC", url=self.url, port=self.port)
             return client
-            
+
         except Exception as error:
             logger.error(
-                f"gRPC connection failed",
+                "gRPC connection failed",
                 url=self.url,
                 port=self.port,
-                error=str(error)
+                error=str(error),
             )
             raise ConnectionError(f"Unable to connect to Qdrant via gRPC: {error}")
 
@@ -81,14 +77,14 @@ class VectorStore:
             is_connected = True
         except Exception:
             is_connected = False
-            
+
         return {
             "connected": is_connected,
             "url": self.url,
             "port": self.port,
             "protocol": "gRPC",
             "collection_name": self.collection_name,
-            "collections_count": len(collections.collections) if is_connected else 0
+            "collections_count": len(collections.collections) if is_connected else 0,
         }
 
     def create_collection(self, vector_size: int = 1024) -> None:

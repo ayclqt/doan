@@ -28,10 +28,10 @@ async def check_conversation_collections_exist():
     """Check if conversation collections already exist"""
     try:
         client = QdrantClient(
-            url=config.qdrant_url, 
+            url=config.qdrant_url,
             port=config.qdrant_port,
             grpc_port=config.qdrant_port,
-            prefer_grpc=True
+            prefer_grpc=True,
         )
         collections = client.get_collections()
         collection_names = [collection.name for collection in collections.collections]
@@ -84,10 +84,10 @@ async def init_conversation_collections():
         from qdrant_client import QdrantClient
 
         client = QdrantClient(
-            url=config.qdrant_url, 
+            url=config.qdrant_url,
             port=config.qdrant_port,
             grpc_port=config.qdrant_port,
-            prefer_grpc=True
+            prefer_grpc=True,
         )
         collections = client.get_collections()
         collection_names = [collection.name for collection in collections.collections]
@@ -118,10 +118,10 @@ async def check_qdrant_connection():
     """Check if Qdrant is available"""
     try:
         client = QdrantClient(
-            url=config.qdrant_url, 
+            url=config.qdrant_url,
             port=config.qdrant_port,
             grpc_port=config.qdrant_port,
-            prefer_grpc=True
+            prefer_grpc=True,
         )
         collections = client.get_collections()
 

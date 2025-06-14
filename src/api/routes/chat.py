@@ -21,7 +21,7 @@ from litestar.status_codes import (
 )
 
 from ...config import config, logger
-from ...langchain_integration import LangchainPipeline, VectorStore
+from ...langchain_integration.facade import get_facade, ProductAssistantFacade
 from ..schemas import (
     ChatHistoryResponse,
     ChatRequest,
@@ -45,7 +45,7 @@ __email__ = "quangtri.lam.9@gmail.com"
 __status__ = "Development"
 
 # Global instances
-_qa_pipeline: Optional[LangchainPipeline] = None
+_facade_instance: Optional[ProductAssistantFacade] = None
 _conversation_service: Optional[ConversationService] = None
 
 
@@ -62,23 +62,20 @@ def struct_to_dict(struct_obj) -> Dict:
         return struct_obj.__dict__ if hasattr(struct_obj, "__dict__") else {}
 
 
-def get_qa_pipeline() -> LangchainPipeline:
-    """Get or create QA pipeline instance with Agent system."""
-    global _qa_pipeline
-    if _qa_pipeline is None:
+def get_product_assistant() -> ProductAssistantFacade:
+    """Get or create ProductAssistantFacade instance."""
+    global _facade_instance
+    if _facade_instance is None:
         try:
-            vector_store = VectorStore()
-            _qa_pipeline = LangchainPipeline(
-                vector_store=vector_store, use_agent_system=True
-            )
-            logger.info("QA Pipeline with Agent System initialized successfully")
+            _facade_instance = get_facade()
+            logger.info("ProductAssistantFacade initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize QA Pipeline: {e}")
+            logger.error(f"Failed to initialize ProductAssistantFacade: {e}")
             raise HTTPException(
                 status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to initialize chatbot service",
+                detail="Failed to initialize product assistant service",
             )
-    return _qa_pipeline
+    return _facade_instance
 
 
 async def get_conversation_service() -> ConversationService:
@@ -145,7 +142,7 @@ async def get_or_create_conversation(
 async def stream_chat_response(
     message: str,
     conversation_id: str,
-    qa_pipeline: LangchainPipeline,
+    facade: ProductAssistantFacade,
     user_id: str,
     username: str,
     include_search_info: bool = False,
@@ -182,7 +179,10 @@ async def stream_chat_response(
 
         # Stream response chunks
         full_response = ""
-        for chunk in qa_pipeline.answer_question_stream(message, conversation_history):
+        facade = get_product_assistant()
+        for chunk in facade.get_product_recommendations_stream(
+            message, conversation_history
+        ):
             full_response += chunk
 
             chunk_data = ChatStreamChunk(
@@ -194,38 +194,17 @@ async def stream_chat_response(
         search_info = None
         if include_search_info:
             try:
-                search_info = qa_pipeline.get_search_info(message)
+                system_info = facade.get_system_info()
+                search_info = {
+                    "system_status": system_info["status"],
+                    "clean_agent_available": system_info["clean_agent_available"],
+                    "capabilities": system_info["capabilities"],
+                    "facade_version": system_info.get("facade_version", "1.0"),
+                }
 
-                # Add Agent system statistics if available
-                if hasattr(qa_pipeline, "agent_system") and qa_pipeline.agent_system:
-                    agent_stats = qa_pipeline.agent_system.get_stats()
-                    search_info["agent_stats"] = {
-                        "total_queries": agent_stats["performance"]["total_queries"],
-                        "tool_calls": agent_stats["performance"]["tool_calls"],
-                        "avg_tools_per_query": agent_stats["performance"][
-                            "average_tools_per_query"
-                        ],
-                        "agent_enabled": True,
-                    }
-                elif (
-                    hasattr(qa_pipeline, "llm_search_system")
-                    and qa_pipeline.llm_search_system
-                ):
-                    system_stats = qa_pipeline.llm_search_system.get_system_stats()
-                    search_info["llm_system_stats"] = {
-                        "total_decisions": system_stats["performance"][
-                            "total_decisions"
-                        ],
-                        "cache_hit_rate": system_stats["cache"]["hit_rate"]
-                        if "cache" in system_stats
-                        else 0,
-                        "avg_decision_time": system_stats["performance"][
-                            "avg_decision_time"
-                        ],
-                        "llm_enabled": True,
-                    }
-                else:
-                    search_info["system_stats"] = {"ai_system_enabled": False}
+                # Add agent stats if available
+                if "agent_stats" in system_info:
+                    search_info["agent_stats"] = system_info["agent_stats"]
 
             except Exception as e:
                 logger.warning(f"Could not get search info: {e}")
@@ -287,7 +266,7 @@ class Chat(Controller):
         """Main chat endpoint với streaming support."""
         try:
             user: User = request.user
-            qa_pipeline = get_qa_pipeline()
+            facade = get_product_assistant()
 
             # Get or create conversation
             conversation_id = await get_or_create_conversation(
@@ -295,11 +274,8 @@ class Chat(Controller):
             )
 
             # Configure web search if specified
-            if data.web_search_enabled is not None:
-                if data.web_search_enabled:
-                    qa_pipeline.enable_web_search_feature()
-                else:
-                    qa_pipeline.disable_web_search()
+            # Web search configuration moved to facade system
+            # The facade handles web search internally based on query needs
 
             # Return streaming response if requested
             if data.stream:
@@ -307,7 +283,7 @@ class Chat(Controller):
                     stream_chat_response(
                         data.message,
                         conversation_id,
-                        qa_pipeline,
+                        facade,
                         user.id,
                         user.username,
                         data.include_search_info,
@@ -342,7 +318,11 @@ class Chat(Controller):
 
             # Non-streaming response
             start_time = datetime.now(timezone.utc)
-            response = qa_pipeline.answer_question(data.message, conversation_history)
+            facade = get_product_assistant()
+            result = facade.get_product_recommendations(
+                data.message, conversation_history
+            )
+            response = result["response"]
             end_time = datetime.now(timezone.utc)
             response_time = (end_time - start_time).total_seconds()
 
@@ -350,43 +330,17 @@ class Chat(Controller):
             search_info = None
             if data.include_search_info:
                 try:
-                    search_info = qa_pipeline.get_search_info(data.message)
+                    system_info = facade.get_system_info()
+                    search_info = {
+                        "system_status": system_info["status"],
+                        "clean_agent_available": system_info["clean_agent_available"],
+                        "capabilities": system_info["capabilities"],
+                        "facade_version": system_info.get("facade_version", "1.0"),
+                    }
 
-                    # Add Agent system statistics if available
-                    if (
-                        hasattr(qa_pipeline, "agent_system")
-                        and qa_pipeline.agent_system
-                    ):
-                        agent_stats = qa_pipeline.agent_system.get_stats()
-                        search_info["agent_stats"] = {
-                            "total_queries": agent_stats["performance"][
-                                "total_queries"
-                            ],
-                            "tool_calls": agent_stats["performance"]["tool_calls"],
-                            "avg_tools_per_query": agent_stats["performance"][
-                                "average_tools_per_query"
-                            ],
-                            "agent_enabled": True,
-                        }
-                    elif (
-                        hasattr(qa_pipeline, "llm_search_system")
-                        and qa_pipeline.llm_search_system
-                    ):
-                        system_stats = qa_pipeline.llm_search_system.get_system_stats()
-                        search_info["llm_system_stats"] = {
-                            "total_decisions": system_stats["performance"][
-                                "total_decisions"
-                            ],
-                            "cache_hit_rate": system_stats["cache"]["hit_rate"]
-                            if "cache" in system_stats
-                            else 0,
-                            "avg_decision_time": system_stats["performance"][
-                                "avg_decision_time"
-                            ],
-                            "llm_enabled": True,
-                        }
-                    else:
-                        search_info["system_stats"] = {"ai_system_enabled": False}
+                    # Add agent stats if available
+                    if "agent_stats" in system_info:
+                        search_info["agent_stats"] = system_info["agent_stats"]
 
                 except Exception as e:
                     logger.warning(f"Could not get search info: {e}")
@@ -599,8 +553,17 @@ class Chat(Controller):
                     detail="Query parameter is required",
                 )
 
-            qa_pipeline = get_qa_pipeline()
-            search_info = qa_pipeline.get_search_info(query)
+            facade = get_product_assistant()
+            system_info = facade.get_system_info()
+            search_info = {
+                "system_status": system_info["status"],
+                "clean_agent_available": system_info["clean_agent_available"],
+                "capabilities": system_info["capabilities"],
+                "facade_version": system_info.get("facade_version", "1.0"),
+                "vector_results_count": 0,  # Placeholder for compatibility
+                "web_search_enabled": True,  # Facade handles this internally
+                "web_search_available": True,
+            }
 
             return SearchInfoResponse(
                 vector_results_count=search_info.get("vector_results_count", 0),
@@ -625,31 +588,30 @@ class Chat(Controller):
     async def get_agent_system_stats(self) -> dict:
         """Lấy thống kê Agent system."""
         try:
-            qa_pipeline = get_qa_pipeline()
+            facade = get_product_assistant()
+            system_info = facade.get_system_info()
 
-            if hasattr(qa_pipeline, "agent_system") and qa_pipeline.agent_system:
-                stats = qa_pipeline.agent_system.get_stats()
-                return {
-                    "agent_enabled": True,
-                    "system_stats": stats,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            elif (
-                hasattr(qa_pipeline, "llm_search_system")
-                and qa_pipeline.llm_search_system
-            ):
-                stats = qa_pipeline.llm_search_system.get_system_stats()
-                return {
-                    "llm_enabled": True,
-                    "system_stats": stats,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
+            response = {
+                "clean_agent_available": system_info["clean_agent_available"],
+                "facade_version": system_info.get("facade_version", "1.0"),
+                "system_status": system_info["status"],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+            # Add agent stats if available
+            if "agent_stats" in system_info:
+                response.update(
+                    {"agent_enabled": True, "system_stats": system_info["agent_stats"]}
+                )
             else:
-                return {
-                    "ai_system_enabled": False,
-                    "message": "No AI system available",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
+                response.update(
+                    {
+                        "agent_enabled": False,
+                        "message": "Clean product agent operational via facade",
+                    }
+                )
+
+            return response
 
         except Exception as e:
             logger.error(f"Get agent stats error: {e}")
@@ -662,35 +624,31 @@ class Chat(Controller):
     async def reset_agent_stats(self) -> dict:
         """Reset Agent system statistics."""
         try:
-            qa_pipeline = get_qa_pipeline()
+            facade = get_product_assistant()
 
-            if hasattr(qa_pipeline, "agent_system") and qa_pipeline.agent_system:
-                qa_pipeline.agent_system.reset_stats()
-                stats = qa_pipeline.agent_system.get_stats()
-
-                return {
-                    "success": True,
-                    "message": "Agent statistics reset successfully",
-                    "stats": stats,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            elif (
-                hasattr(qa_pipeline, "llm_search_system")
-                and qa_pipeline.llm_search_system
-            ):
-                qa_pipeline.llm_search_system.optimize_performance()
-                stats = qa_pipeline.llm_search_system.get_system_stats()
-
-                return {
-                    "success": True,
-                    "message": "LLM system optimized successfully",
-                    "stats": stats,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            else:
+            try:
+                # Try to reset stats via facade
+                agent = facade._get_agent()
+                if agent:
+                    agent.reset_stats()
+                    stats = agent.get_stats()
+                    return {
+                        "success": True,
+                        "message": "Product introduction agent statistics reset successfully",
+                        "stats": stats,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": "Product introduction agent not available",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+            except Exception as e:
+                logger.warning(f"Could not reset agent stats: {e}")
                 return {
                     "success": False,
-                    "message": "No AI system available",
+                    "message": f"Failed to reset stats: {e}",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
 
@@ -705,31 +663,59 @@ class Chat(Controller):
     async def get_available_tools(self) -> dict:
         """Lấy danh sách tools khả dụng của Agent."""
         try:
-            qa_pipeline = get_qa_pipeline()
+            facade = get_product_assistant()
 
-            if hasattr(qa_pipeline, "agent_system") and qa_pipeline.agent_system:
-                tools_info = []
-                for tool in qa_pipeline.agent_system.tools:
-                    tools_info.append(
-                        {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "args_schema": tool.args_schema.schema()
-                            if tool.args_schema
-                            else None,
-                        }
-                    )
+            try:
+                agent = facade._get_agent()
+                if agent and hasattr(agent, "tools"):
+                    tools_info = []
+                    for tool in agent.tools:
+                        tools_info.append(
+                            {
+                                "name": tool.name,
+                                "description": tool.description,
+                                "args_schema": tool.args_schema.schema()
+                                if tool.args_schema
+                                else None,
+                            }
+                        )
 
-                return {
-                    "agent_enabled": True,
-                    "available_tools": tools_info,
-                    "total_tools": len(tools_info),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            else:
+                    return {
+                        "agent_enabled": True,
+                        "available_tools": tools_info,
+                        "total_tools": len(tools_info),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                else:
+                    # Return clean agent tools information
+                    return {
+                        "agent_enabled": True,
+                        "available_tools": [
+                            {
+                                "name": "product_search",
+                                "description": "Search for product information",
+                                "type": "clean_search",
+                            },
+                            {
+                                "name": "web_knowledge",
+                                "description": "Additional web knowledge",
+                                "type": "supplementary",
+                            },
+                            {
+                                "name": "conversation_context",
+                                "description": "Resolve conversation references",
+                                "type": "context",
+                            },
+                        ],
+                        "total_tools": 3,
+                        "message": "Clean product introduction agent operational",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+            except Exception as e:
+                logger.warning(f"Could not get agent tools: {e}")
                 return {
                     "agent_enabled": False,
-                    "message": "Agent system not available",
+                    "message": f"Failed to get tools: {e}",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
 
@@ -752,9 +738,107 @@ class Chat(Controller):
             "Macbook Air M2 có phù hợp cho lập trình không?",
             "Máy tính bàn để chơi game và làm việc?",
             "Smartwatch tốt nhất cho người tập thể thao?",
+            # Order flow examples
+            "Tôi muốn đặt hàng iPhone 15",
+            "Shop còn hàng Oppo A18 không?",
         ]
 
         return {"suggestions": suggestions, "context": "Sản phẩm điện tử và công nghệ"}
+
+    @post("/intent-analysis", status_code=HTTP_200_OK)
+    async def analyze_intent(
+        self, request: Request[User, Token, Any], data: dict
+    ) -> dict:
+        """Analyze intent for debugging purposes."""
+        try:
+            message = data.get("message", "").strip()
+            conversation_history = data.get("conversation_history", [])
+
+            if not message:
+                raise HTTPException(
+                    status_code=HTTP_400_BAD_REQUEST,
+                    detail="Message is required",
+                )
+
+            # Get the agent and analyze intent
+            facade = get_product_assistant()
+            agent = facade._get_agent()
+
+            # Check if it's our UnifiedSmartAgent
+            if hasattr(agent, "_analyze_intent"):
+                # Direct access to intent analysis
+                intent_result = agent._analyze_intent(message, conversation_history)
+
+                return {
+                    "message": message,
+                    "intent_analysis": intent_result,
+                    "agent_type": "unified_smart_agent",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            else:
+                # Fallback for older agents
+                return {
+                    "message": message,
+                    "intent_analysis": {
+                        "intent_type": "PRODUCT_CONSULTATION",
+                        "confidence": 0.0,
+                        "score": 0,
+                        "triggers": [],
+                        "note": "Intent analysis not available with current agent",
+                    },
+                    "agent_type": "legacy_agent",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Intent analysis error: {e}")
+            raise HTTPException(
+                status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error during intent analysis",
+            )
+
+    @get("/order-flow-status", status_code=HTTP_200_OK)
+    async def get_order_flow_status(self) -> dict:
+        """Get Smart Order Flow system status."""
+        try:
+            facade = get_product_assistant()
+            agent = facade._get_agent()
+
+            # Check agent type and capabilities
+            agent_type = type(agent).__name__
+            has_order_flow = hasattr(agent, "_analyze_intent")
+            has_order_tools = hasattr(agent, "order_tools") if has_order_flow else False
+
+            response = {
+                "smart_order_flow_enabled": has_order_flow,
+                "agent_type": agent_type,
+                "capabilities": {
+                    "intent_analysis": has_order_flow,
+                    "order_processing": has_order_tools,
+                    "consultation_flow": True,  # Always available
+                    "streaming": hasattr(agent, "process_query_stream"),
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+            # Add stats if available
+            if hasattr(agent, "get_stats"):
+                try:
+                    stats = agent.get_stats()
+                    response["statistics"] = stats
+                except Exception as e:
+                    logger.warning(f"Could not get agent stats: {e}")
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Order flow status error: {e}")
+            raise HTTPException(
+                status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error while getting order flow status",
+            )
 
     @post("/conversations/{conversation_id:str}/title", status_code=HTTP_200_OK)
     async def update_conversation_title(

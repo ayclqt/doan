@@ -40,12 +40,7 @@ class ConversationService:
         redis_url: str = config.redis_url,
     ):
         """Initialize the conversation service."""
-        self.client = QdrantClient(
-            url=url, 
-            port=port,
-            grpc_port=port,
-            prefer_grpc=True
-        )
+        self.client = QdrantClient(url=url, port=port, grpc_port=port, prefer_grpc=True)
         self.conversations_collection = "conversations"
         self.messages_collection = "conversation_messages"
         self.admin_username = admin_username

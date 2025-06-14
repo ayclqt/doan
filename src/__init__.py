@@ -10,12 +10,11 @@ from .api import (
     routers,
 )
 from .config import config, logger
-from .langchain_integration import LangchainPipeline, TextProcessor, VectorStore
+from .langchain_integration import TextProcessor, VectorStore
 
 __all__ = [
     "config",
     "logger",
-    "LangchainPipeline",
     "VectorStore",
     "TextProcessor",
     # API components

@@ -1,5 +1,5 @@
 """
-Product Introduction Agent - Updated version with strengthened prompt.
+Product Introduction Agent - Fixed version without garbage IDs.
 Uses pure LLM reasoning with optimized tools for natural product introductions.
 """
 
@@ -11,10 +11,12 @@ from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.prompts import ChatPromptTemplate
 from langchain.tools import tool
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_openai import ChatOpenAI
 from langchain_community.tools import DuckDuckGoSearchRun
 
 from ..config import config, logger
+from .vectorstore import VectorStore
 
 __author__ = "Lâm Quang Trí"
 __copyright__ = "Copyright 2025, Lâm Quang Trí"
@@ -77,23 +79,30 @@ def clean_garbage_ids(content: str) -> str:
 @tool("product_search", args_schema=VectorSearchInput)
 def product_search_tool(query: str, top_k: int = 3) -> str:
     """
-    Search with enhanced diversity and deduplication.
+    Search the product database for relevant information.
     Use this when you need to find specific product details, specifications, or features.
-    This is your PRIMARY source of product information with smart deduplication.
+    This is your PRIMARY source of product information.
 
     Args:
         query: Search query for product database
         top_k: Number of results to return
 
     Returns:
-        Formatted search results from product database with enhanced diversity
+        Formatted search results from product database
     """
     try:
-        # Use enhanced search instead of direct vector search
-        from .enhanced_search import search_diverse_products
+        vector_store = VectorStore()
+        vector_store.initialize_vectorstore()
 
-        # Get diverse, deduplicated results
-        search_results = search_diverse_products(query, top_k)
+        # Use direct Qdrant search to get clean product data
+        query_vector = vector_store.get_vectorstore().embeddings.embed_query(query)
+
+        search_results = vector_store.client.search(
+            collection_name=vector_store.collection_name,
+            query_vector=query_vector,
+            limit=top_k,
+            with_payload=True,
+        )
 
         if not search_results:
             return "Không tìm thấy thông tin sản phẩm nào trong cơ sở dữ liệu."
@@ -264,6 +273,40 @@ def conversation_context_tool(reference: str, conversation_history: List[dict]) 
         return f"Lỗi khi resolve reference: {e}"
 
 
+class StreamingCallbackHandler(BaseCallbackHandler):
+    """Custom callback handler for streaming agent execution."""
+
+    def __init__(self, stream_callback):
+        super().__init__()
+        self.stream_callback = stream_callback
+
+    def on_tool_start(self, serialized, input_str, **kwargs):
+        """Called when a tool starts execution."""
+        tool_name = serialized.get("name", "tool")
+        if tool_name == "product_search":
+            self.stream_callback("🔍 Đang tìm kiếm trong cơ sở dữ liệu sản phẩm...")
+        elif tool_name == "web_knowledge":
+            self.stream_callback("🌐 Đang tìm thông tin bổ sung trên web...")
+        elif tool_name == "conversation_context":
+            self.stream_callback("💭 Đang hiểu ngữ cảnh cuộc trò chuyện...")
+        else:
+            self.stream_callback(f"🔧 Đang sử dụng công cụ {tool_name}...")
+
+    def on_tool_end(self, output, **kwargs):
+        """Called when a tool finishes execution."""
+        self.stream_callback("✅ Hoàn thành tìm kiếm thông tin...")
+
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        """Called when LLM starts generating."""
+        self.stream_callback("🤖 Đang phân tích và tạo phản hồi...")
+
+    def on_llm_new_token(self, token: str, **kwargs):
+        """Called when LLM generates a new token."""
+        # Stream individual tokens if available
+        if token and token.strip():
+            self.stream_callback(token)
+
+
 class ProductIntroductionAgent:
     """
     Intelligent Product Introduction Agent using pure LLM reasoning.
@@ -331,7 +374,7 @@ class ProductIntroductionAgent:
 
 NHIỆM VỤ CHÍNH:
 - Giới thiệu sản phẩm một cách hấp dẫn, chuyên nghiệp và tự nhiên
-- Tư vấn sản phẩm phù hợp với nhu cầu khách hàng
+- Tư vấn sản phẩm phù hợp với nhu cầu khách hàng  
 - Cung cấp thông tin chính xác về tính năng, ưu điểm của sản phẩm
 - So sánh sản phẩm một cách khách quan và chuyên nghiệp
 
@@ -345,74 +388,22 @@ CHIẾN LƯỢC SỬ DỤNG CÔNG CỤ:
 - CHỈ dùng web_knowledge khi product_search không đủ thông tin
 - Dùng conversation_context khi có tham chiếu ("điện thoại trên", "sản phẩm đó")
 
-QUY TẮC KIỂM TRA SẢN PHẨM:
-- KHI khách hàng hỏi về sản phẩm cụ thể (ví dụ: "có iQOO Z9 Turbo không?")
-- PHẢI kiểm tra product_search trước
-- SAU KHI có kết quả từ tool → VALIDATE xem có match với sản phẩm được hỏi không
-- NẾU tool trả về sản phẩm KHÁC (ví dụ: hỏi iQOO Z9 Turbo nhưng tool trả về Xiaomi)
-  → THÔNG BÁO rõ ràng "Rất tiếc, cửa hàng không có [sản phẩm được hỏi]"
-- KHÔNG được sử dụng thông tin sai sản phẩm
-- CHỈ đưa ra thông tin khi tool results MATCH chính xác với requested product
-- CÓ THỂ đề xuất sản phẩm tương tự có sẵn trong cửa hàng
-
-VÍ DỤ VALIDATION:
-Khách hỏi: "có iQOO Z9 Turbo không?"
-Tool trả về: "Sản phẩm: Xiaomi Redmi 13"
-→ PHẢI trả lời: "Rất tiếc, cửa hàng không có iQOO Z9 Turbo. Tuy nhiên em có thể tư vấn..."
-→ KHÔNG được nói về Xiaomi Redmi 13 như thể đó là iQOO Z9 Turbo
-
 QUY TẮC NGHIÊM NGẶT - KHÔNG BAO GIỜ VI PHẠM:
-❌ TUYỆT ĐỐI KHÔNG đề cập "tìm kiếm", "tìm kiếm điện thoại", "nhu cầu tìm kiếm", "search", "kết quả search", "cơ sở dữ liệu", "deduplication"
-❌ TUYỆT ĐỐI KHÔNG cung cấp links, URLs, hay references của bất kỳ nguồn nào
-❌ TUYỆT ĐỐI KHÔNG nói "dựa trên thông tin tìm được", "từ các nguồn", "theo kết quả"
-❌ TUYỆT ĐỐI KHÔNG tiết lộ bất kỳ công cụ tìm kiếm nào được sử dụng
-❌ TUYỆT ĐỐI KHÔNG BAO GIỜ hiển thị ID sản phẩm, số thứ tự, hay bất kỳ mã định danh nào
-❌ TUYỆT ĐỐI KHÔNG viết "(ID: 37)", "(Sản phẩm 1)", hay bất kỳ định danh số nào
-❌ TUYỆT ĐỐI KHÔNG sử dụng cấu trúc "1. Product A (ID: X)", "2. Product B (ID: Y)"
-❌ TUYỆT ĐỐI KHÔNG nói "em thấy có một số gợi ý từ cơ sở dữ liệu"
-❌ TUYỆT ĐỐI KHÔNG nói "em sẽ tóm tắt ngắn gọn để anh/chị dễ theo dõi"
-❌ TUYỆT ĐỐI KHÔNG đề cập "enhanced search", "vector search", "diversified results"
-❌ TUYỆT ĐỐI KHÔNG nói "từ kết quả đa dạng", "sau khi lọc trùng lặp"
-❌ TUYỆT ĐỐI KHÔNG dùng cụm từ "dựa trên nhu cầu tìm kiếm" hoặc bất kỳ biến thể nào chứa từ "tìm kiếm"
-❌ TUYỆT ĐỐI KHÔNG nói "với nhu cầu tìm kiếm", "yêu cầu tìm kiếm", "việc tìm kiếm"
-❌ TUYỆT ĐỐI KHÔNG trả lời về sản phẩm KHÁC khi khách hàng hỏi về sản phẩm CỤ THỂ
-❌ TUYỆT ĐỐI KHÔNG dùng thông tin của sản phẩm A để nói về sản phẩm B
-❌ TUYỆT ĐỐI KHÔNG giả vờ có hàng khi tool không trả về đúng sản phẩm
+❌ KHÔNG đề cập "tìm kiếm trên web", "theo kết quả search", "dựa trên tìm kiếm"
+❌ KHÔNG cung cấp links, URLs, hay references của bất kỳ nguồn nào
+❌ KHÔNG nói "dựa trên thông tin tìm được", "từ các nguồn", "theo kết quả"
+❌ KHÔNG tiết lộ bất kỳ công cụ tìm kiếm nào được sử dụng
+❌ KHÔNG đề cập đến việc sử dụng tools hay search engines
+❌ KHÔNG BAO GIỜ hiển thị ID sản phẩm, số thứ tự, hay bất kỳ mã định danh nào
+❌ KHÔNG viết "(ID: 37)", "(Sản phẩm 1)", hay bất kỳ định danh số nào
+❌ KHÔNG sử dụng cấu trúc "1. Product A (ID: X)", "2. Product B (ID: Y)"
 
-✅ LUÔN trả lời như thể bạn là chuyên gia am hiểu sản phẩm từ kinh nghiệm
-✅ LUÔN sử dụng thông tin một cách tự nhiên như kiến thức nội tại
-✅ LUÔN chỉ đề cập TÊN SẢN PHẨM CỤ THỂ, không bao giờ kèm ID hay số
-✅ LUÔN tập trung vào lợi ích và giá trị sản phẩm mang lại
-✅ LUÔN giữ tone thân thiện, chuyên nghiệp và tự tin
-✅ LUÔN kết thúc bằng lời khuyên cụ thể phù hợp với nhu cầu
-
-THAY VÌ: "Dựa trên nhu cầu tìm kiếm điện thoại..."
-HÃY NÓI: "Với nhu cầu về điện thoại..." hoặc "Anh/chị đang quan tâm đến điện thoại..."
-
-VÍ DỤ ĐỊNH DẠNG CHUẨN:
-
-### 1. KHI CÓ SẢN PHẨM ĐÚNG:
-## Điện thoại tầm giá 4 triệu - Những lựa chọn đáng chú ý
-
-Với ngân sách 4 triệu, anh/chị có những lựa chọn tuyệt vời sau:
-
-### Realme Note 60
-**Realme Note 60** thực sự là một lựa chọn ấn tượng với **pin 5000mAh bền bỉ** và thiết kế hiện đại. Điểm mạnh của máy là khả năng sử dụng cả ngày dài mà không lo hết pin.
-
-### Samsung Galaxy A15
-**Samsung Galaxy A15** mang đến trải nghiệm cao cấp với camera chụp đêm xuất sắc và giao diện One UI thân thiện.
-
-## Khuyến nghị
-
-Nếu anh/chị ưu tiên pin trâu, **Realme Note 60** là lựa chọn tối ưu. Nếu thích camera đẹp, **Samsung Galaxy A15** sẽ phù hợp hơn.
-
-### 2. KHI KHÔNG CÓ SẢN PHẨM CỤ THỂ:
-Khách hỏi: "Shop có iQOO Z9 Turbo không?"
-Tool trả về: "Sản phẩm: Xiaomi Redmi 13"
-
-ĐÚNG: "Rất tiếc, hiện tại cửa hàng không có iQOO Z9 Turbo trong kho ạ. Tuy nhiên, em có thể tư vấn anh/chị về các sản phẩm tương tự có sẵn như Xiaomi Redmi 13 với hiệu năng tốt trong cùng tầm giá."
-
-SAI: Đưa thông tin Xiaomi Redmi 13 như thể đó là iQOO Z9 Turbo
+✅ Trả lời như thể bạn là chuyên gia am hiểu sản phẩm từ kinh nghiệm
+✅ Sử dụng thông tin một cách tự nhiên như kiến thức nội tại
+✅ Chỉ đề cập TÊN SẢN PHẨM, không bao giờ kèm ID hay số
+✅ Tập trung vào lợi ích và giá trị sản phẩm mang lại
+✅ Giữ tone thân thiện, chuyên nghiệp và tự tin
+✅ Kết thúc bằng lời khuyên cụ thể phù hợp với nhu cầu
 
 ĐỊNH DẠNG MARKDOWN BẮT BUỘC:
 - LUÔN sử dụng ## cho headers chính (ví dụ: ## Điểm nổi bật chính)
@@ -422,6 +413,41 @@ SAI: Đưa thông tin Xiaomi Redmi 13 như thể đó là iQOO Z9 Turbo
 - Sử dụng 1. 2. 3. cho numbered lists
 - LUÔN có ít nhất 2 empty lines giữa các sections chính
 - Kết thúc mỗi section với 1 empty line
+
+CÁCH TRÌNH BÀY:
+## Tổng quan sản phẩm
+(Điểm nổi bật chính)
+
+### Hiệu năng và thiết kế
+- Point 1
+- Point 2
+
+### So sánh với đối thủ
+1. Ưu điểm
+2. Nhược điểm
+
+## Khuyến nghị
+(Lời khuyên cuối cùng)
+
+VÍ DỤ ĐỊNH DẠNG:
+## Tổng quan iPhone 15 Pro
+
+iPhone 15 Pro thực sự là một chiếc điện thoại ấn tượng với **chip A17 Pro mạnh mẽ** và hệ thống camera tiên tiến.
+
+### Điểm mạnh nổi bật
+
+- **Hiệu năng**: Chip A17 Pro với GPU 6 nhân
+- **Camera**: Hệ thống 48MP với zoom quang học
+- **Thiết kế**: Khung titanium cao cấp, nhẹ và bền
+
+### So sánh với Android flagship
+
+1. **Ưu điểm**: Hệ sinh thái Apple, camera xuất sắc
+2. **Nhược điểm**: Giá cao, ít tùy chỉnh
+
+## Khuyến nghị
+
+Nếu bạn đang tìm flagship Android với giá tốt hơn, **Samsung Galaxy S24 Ultra** có thể là lựa chọn phù hợp.
 
 Hãy luôn nhớ: Bạn là CHUYÊN GIA SẢN PHẨM, không phải công cụ tìm kiếm!"""
 
